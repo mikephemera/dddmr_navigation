@@ -15,6 +15,7 @@
 #include <gtsam/nonlinear/ISAM2.h>
 
 #include "std_srvs/srv/empty.hpp"
+#include "dddmr_sys_core/srv/get_key_frame_cloud.hpp"
 
 //@allows us to use pcl::transformPointCloud function
 #include <pcl/io/pcd_io.h>
@@ -90,7 +91,9 @@ class MapOptimization : public rclcpp::Node
 
   void pcdSaver(const std::shared_ptr<std_srvs::srv::Empty::Request> request,
           std::shared_ptr<std_srvs::srv::Empty::Response> response);
-          
+  void getKeyFrameCloud(const std::shared_ptr<dddmr_sys_core::srv::GetKeyFrameCloud::Request> request,
+          std::shared_ptr<dddmr_sys_core::srv::GetKeyFrameCloud::Response> response);
+
   void run();
   void runWoLO();
   void publishGlobalMapThread();
@@ -157,6 +160,7 @@ class MapOptimization : public rclcpp::Node
   rclcpp::CallbackGroup::SharedPtr timer_run_cb_group_;
   rclcpp::CallbackGroup::SharedPtr timer_pub_gbl_map_cb_group_;
   rclcpp::CallbackGroup::SharedPtr timer_loop_closure_cb_group_;
+  rclcpp::CallbackGroup::SharedPtr get_key_frame_srv_cb_group_;
 
   rclcpp::TimerBase::SharedPtr timer_run_;
   rclcpp::TimerBase::SharedPtr timer_pub_gbl_map_;
@@ -182,6 +186,7 @@ class MapOptimization : public rclcpp::Node
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSelectedCloudForLMOptimization;
 
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr srvSavePCD;
+  rclcpp::Service<dddmr_sys_core::srv::GetKeyFrameCloud>::SharedPtr srvGetKeyFrameCloud;
   
   std::vector<pcl::PointCloud<PointType>::Ptr> surfCloudKeyFrames;
   std::vector<pcl::PointCloud<PointType>::Ptr> outlierCloudKeyFrames;

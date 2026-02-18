@@ -53,8 +53,6 @@ MapOptimization::MapOptimization(std::string name,
   has_m2ci_af3_ = false;
   current_ground_size_ = 0;
 
-  srvSavePCD = this->create_service<std_srvs::srv::Empty>("save_mapped_point_cloud", std::bind(&MapOptimization::pcdSaver, this, std::placeholders::_1, std::placeholders::_2));
-
   pub_key_pose_arr_ = this->create_publisher<geometry_msgs::msg::PoseArray>("key_poses", 1);
   
   pub_pose_graph_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("pose_graph", rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
@@ -143,12 +141,29 @@ MapOptimization::MapOptimization(std::string name,
   timer_run_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   timer_pub_gbl_map_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   timer_loop_closure_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  get_key_frame_srv_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+
+  srvSavePCD = this->create_service<std_srvs::srv::Empty>("save_mapped_point_cloud", std::bind(&MapOptimization::pcdSaver, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, get_key_frame_srv_cb_group_);
+  srvGetKeyFrameCloud = this->create_service<dddmr_sys_core::srv::GetKeyFrameCloud>("get_key_frame_cloud", std::bind(&MapOptimization::getKeyFrameCloud, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, get_key_frame_srv_cb_group_);
 
   timer_run_ = this->create_wall_timer(1ms, std::bind(&MapOptimization::run, this), timer_run_cb_group_);
   timer_pub_gbl_map_ = this->create_wall_timer(500ms, std::bind(&MapOptimization::publishGlobalMapThread, this), timer_pub_gbl_map_cb_group_);
   timer_loop_closure_ = this->create_wall_timer(1000ms, std::bind(&MapOptimization::loopClosureThread, this), timer_loop_closure_cb_group_);
   timer_ground_edge_detection_ = this->create_wall_timer(500ms, std::bind(&MapOptimization::groundEdgeDetectionThread, this), timer_pub_gbl_map_cb_group_);
 
+}
+
+void MapOptimization::getKeyFrameCloud(const std::shared_ptr<dddmr_sys_core::srv::GetKeyFrameCloud::Request> request,
+          std::shared_ptr<dddmr_sys_core::srv::GetKeyFrameCloud::Response> response){
+
+  pcl::PointCloud<PointType>::Ptr keyFrameBaseLink;
+  keyFrameBaseLink.reset(new pcl::PointCloud<PointType>());
+  if(request->key_frame_number>patchedGroundKeyFrames_Copy.size()-1)
+    return;
+  *keyFrameBaseLink = *transformPointCloud(patchedGroundKeyFrames_Copy[request->key_frame_number], &cloudKeyPoses6D->points[request->key_frame_number]);
+  pcl::transformPointCloud(*keyFrameBaseLink, *keyFrameBaseLink, trans_m2ci_af3_);
+  pcl::toROSMsg(*keyFrameBaseLink, response->key_frame_cloud);
+  
 }
 
 void MapOptimization::pcdSaver(const std::shared_ptr<std_srvs::srv::Empty::Request> request,

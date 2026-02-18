@@ -35,6 +35,7 @@ find_package(OpenCV REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(image_geometry REQUIRED)
 find_package(dddmr_trt REQUIRED)
+find_package(dddmr_sys_core REQUIRED)
 
 set(dependencies
   rclcpp
@@ -60,6 +61,7 @@ set(dependencies
   cloud_msgs
   cv_bridge
   image_geometry
+  dddmr_sys_core
 )
 
 #Check yolo build flag
@@ -81,6 +83,7 @@ if(TRT_ENABLED)
     ${GTSAM_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
     ${dddmr_trt_INCLUDE_DIRS}
+    ${dddmr_sys_core_INCLUDE_DIRS}
   )
 else()
     message(STATUS "TensorRT is disabled.")
@@ -89,6 +92,7 @@ else()
       ${PCL_INCLUDE_DIRS}
       ${GTSAM_INCLUDE_DIRS}
       ${OpenCV_INCLUDE_DIRS}
+      ${dddmr_sys_core_INCLUDE_DIRS}
     )
 endif()
 

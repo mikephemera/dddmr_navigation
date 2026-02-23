@@ -10,7 +10,7 @@ lego_loam_ip:
   ros__parameters:
     use_sim_time: true
     laser:
-        odom_type: "laser_odometry"         #wheel_odometry/laser_odometry 
+        odom_type: "wheel_odometry"         #wheel_odometry/laser_odometry 
         baselink_frame: "base_link"
         num_vertical_scans: 100
         num_horizontal_scans: 400

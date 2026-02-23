@@ -65,7 +65,7 @@ class FeatureAssociation : public rclcpp::Node
   std::string odom_type_;
   std::string baselink_frame_;
   bool first_odom_prepared_;
-  tf2::Transform tf2_trans_b2s_, tf2_first_odom_inverse_, tf2_first_odom_, tf2_trans_c2s_;
+  tf2::Transform tf2_trans_b2s_, tf2_first_odom2b_, tf2_first_odom2s_, tf2_first_odom2s_inverse_, tf2_trans_c2s_;
   bool to_map_optimization_;
   bool odom_sanity_check_;
   

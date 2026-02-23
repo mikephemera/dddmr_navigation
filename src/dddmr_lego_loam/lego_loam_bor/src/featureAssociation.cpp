@@ -230,9 +230,10 @@ void FeatureAssociation::odomHandler(const nav_msgs::msg::Odometry::SharedPtr od
   //@ If odom is not initilized with 0, we record it and then transform it
   //@ Because odom in lego loam should always start with 0
   if(!first_odom_prepared_){
-    tf2_first_odom_.setOrigin(tf2::Vector3(odomIn->pose.pose.position.x, odomIn->pose.pose.position.y, odomIn->pose.pose.position.z));
-    tf2_first_odom_.setRotation(tf2::Quaternion(odomIn->pose.pose.orientation.x, odomIn->pose.pose.orientation.y, odomIn->pose.pose.orientation.z, odomIn->pose.pose.orientation.w));
-    tf2_first_odom_inverse_ = tf2_first_odom_.inverse();
+    tf2_first_odom2b_.setOrigin(tf2::Vector3(odomIn->pose.pose.position.x, odomIn->pose.pose.position.y, odomIn->pose.pose.position.z));
+    tf2_first_odom2b_.setRotation(tf2::Quaternion(odomIn->pose.pose.orientation.x, odomIn->pose.pose.orientation.y, odomIn->pose.pose.orientation.z, odomIn->pose.pose.orientation.w));
+    tf2_first_odom2s_.mult(tf2_first_odom2b_, tf2_trans_b2s_);
+    tf2_first_odom2s_inverse_ = tf2_first_odom2s_.inverse();
     first_odom_prepared_ = true;
     RCLCPP_WARN(this->get_logger(), "The first odom is record: %.2f, %.2f, %.2f", odomIn->pose.pose.position.x, odomIn->pose.pose.position.y, odomIn->pose.pose.position.z);
   }
@@ -253,30 +254,27 @@ void FeatureAssociation::odomHandler(const nav_msgs::msg::Odometry::SharedPtr od
     }
   }
 
-  tf2::Transform tf2_trans_o2b;
+  tf2::Transform tf2_trans_o2b, tf2_trans_o2s, tf2_trans_first_s2s;
   tf2_trans_o2b.setOrigin(tf2::Vector3(odomIn->pose.pose.position.x, odomIn->pose.pose.position.y, odomIn->pose.pose.position.z));
   tf2_trans_o2b.setRotation(tf2::Quaternion(odomIn->pose.pose.orientation.x, odomIn->pose.pose.orientation.y, odomIn->pose.pose.orientation.z, odomIn->pose.pose.orientation.w));
+  tf2_trans_o2s.mult(tf2_trans_o2b, tf2_trans_b2s_);
 
-  tf2::Transform tf2_trans_first2b, tf2_trans_o2s;
-  //@ make the first odom msg as origin
-  tf2_trans_first2b.mult(tf2_first_odom_inverse_, tf2_trans_o2b);
-  //@ tf2_trans_first2b is the odom from the first point to rest
-  tf2_trans_o2s.mult(tf2_trans_first2b, tf2_trans_b2s_);
+  tf2_trans_first_s2s.mult(tf2_first_odom2s_inverse_, tf2_trans_o2s);
 
   //@Get RPY
-  tf2::Matrix3x3 m(tf2_trans_o2s.getRotation());
+  tf2::Matrix3x3 m(tf2_trans_first_s2s.getRotation());
   double roll, pitch, yaw;
   m.getRPY(roll, pitch, yaw);
   double odom_time = static_cast<double>(odomIn->header.stamp.sec) + static_cast<double>(odomIn->header.stamp.nanosec) * 1e-9;
   double cloud_time = static_cast<double>(segInfo.header.stamp.sec) + static_cast<double>(segInfo.header.stamp.nanosec) * 1e-9;
-  if(fabs(odom_time-cloud_time)<0.05 || fabs(odom_time)<=0.1 || fabs(cloud_time)<=0.1){ //@ try to handle 0 timestamp
+  //if(fabs(odom_time-cloud_time)<0.05 || fabs(odom_time)<=0.1 || fabs(cloud_time)<=0.1){ //@ try to handle 0 timestamp
     transformWheelOdometrySum[0] = pitch;
     transformWheelOdometrySum[1] = yaw;
     transformWheelOdometrySum[2] = roll;
     transformWheelOdometrySum[3] = odomIn->pose.pose.position.y;
     transformWheelOdometrySum[4] = odomIn->pose.pose.position.z;
     transformWheelOdometrySum[5] = odomIn->pose.pose.position.x;
-  }
+  //}
 
   
   //RCLCPP_WARN(this->get_logger(), "%.2f, %.2f, %.2f <> %.2f, %.2f, %.2f", roll, pitch, yaw, odomIn->pose.pose.position.x, odomIn->pose.pose.position.y, odomIn->pose.pose.position.z);

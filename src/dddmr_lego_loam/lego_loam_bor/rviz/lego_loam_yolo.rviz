@@ -54,12 +54,12 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 255
+      Max Intensity: 213
       Min Color: 0; 0; 0
-      Min Intensity: 6
+      Min Intensity: 1
       Name: Raw
       Position Transformer: XYZ
       Selectable: true
@@ -72,10 +72,10 @@ Visualization Manager:
         Filter size: 1
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /lslidar_point_cloud
+        Value: /airy_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: false
       Autocompute Value Bounds:
@@ -571,25 +571,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 166.0067138671875
+      Distance: 28.309619903564453
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -37.360233306884766
-        Y: -6.221664905548096
-        Z: -7.497598648071289
+        X: 10.46966552734375
+        Y: 4.52200174331665
+        Z: -5.86883020401001
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.834796667098999
+      Pitch: 0.9047966003417969
       Target Frame: map
       Value: Orbit (rviz_default_plugins)
-      Yaw: 1.4935647249221802
+      Yaw: 2.543569803237915
     Saved: ~
 Window Geometry:
   AnnotatedImage:

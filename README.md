@@ -1,15 +1,14 @@
 # 🤖 dddmr_navigation
 ## 🚀 Big update - Deep Lego Loam with YOLO11+TensorRT!
-<table align='center'>
-  <tr width="40%">
-    <td width="40%"><img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_lego_loam_bor/no_yolo_lego_loam.png" width="400" height="260"/><p align='center'>Human being SLAMed in the map</p></td>
-    <td width="40%"><img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_lego_loam_bor/yolo_lego_loam.png" width="400" height="260"/><p align='center'>Human being detected and not used in SLAM</p></td>
-  </tr>
-</table>
-
 <p align='center'>
     <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_lego_loam_bor/yolo_lego_loam.gif" width="400" height="260"/><p align='center'>Lego Loam + YOLOV11 using TensorRT</p>
 </p>
+<table align='center'>
+  <tr width="40%">
+    <td width="40%"><img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_lego_loam_bor/no_yolo_lego_loam.png" width="400" height="260"/><p align='center'>Human being SLAMed in the map (without YOLO)</p></td>
+    <td width="40%"><img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_lego_loam_bor/yolo_lego_loam.png" width="400" height="260"/><p align='center'>Human being detected and not used in SLAM (with YOLO)</p></td>
+  </tr>
+</table>
 
 > [!NOTE]
 > Our current trained model only support RoboSense Airy with 45 deg tilting. We suggest using dense lidar such as Airy/Jt128/Mid360/E1R to get a better performance in YOLO.

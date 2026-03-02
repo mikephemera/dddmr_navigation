@@ -265,14 +265,15 @@ void FeatureAssociation::odomHandler(const nav_msgs::msg::Odometry::SharedPtr od
   double odom_time = static_cast<double>(odomIn->header.stamp.sec) + static_cast<double>(odomIn->header.stamp.nanosec) * 1e-9;
   double cloud_time = static_cast<double>(segInfo.header.stamp.sec) + static_cast<double>(segInfo.header.stamp.nanosec) * 1e-9;
   //if(fabs(odom_time-cloud_time)<0.05 || fabs(odom_time)<=0.1 || fabs(cloud_time)<=0.1){ //@ try to handle 0 timestamp
+  
     transformExternalOdometrySum[0] = pitch;
     transformExternalOdometrySum[1] = yaw;
     transformExternalOdometrySum[2] = roll;
-    transformExternalOdometrySum[3] = odomIn->pose.pose.position.y;
-    transformExternalOdometrySum[4] = odomIn->pose.pose.position.z;
-    transformExternalOdometrySum[5] = odomIn->pose.pose.position.x;
+    transformExternalOdometrySum[3] = tf2_trans_first_s2s.getOrigin().y();
+    transformExternalOdometrySum[4] = tf2_trans_first_s2s.getOrigin().z();
+    transformExternalOdometrySum[5] = tf2_trans_first_s2s.getOrigin().x();
+    
   //}
-
   
   //RCLCPP_WARN(this->get_logger(), "%.2f, %.2f, %.2f <> %.2f, %.2f, %.2f", roll, pitch, yaw, odomIn->pose.pose.position.x, odomIn->pose.pose.position.y, odomIn->pose.pose.position.z);
 }
@@ -1533,10 +1534,9 @@ void FeatureAssociation::runFeatureAssociation() {
     return;
   }
 
-  updateTransformation();
-  integrateTransformation();
-
   if(odom_type_=="laser_odometry"){
+    updateTransformation();
+    integrateTransformation();
     exteralOdometry.header.stamp = cloudHeader.stamp;
     assignMappingOdometry(transformLaserOdometrySum);
   }

@@ -4,7 +4,7 @@ bag_reader:
     bag_file_dir: "/root/dddmr_bags/airy_45deg_labelled_bag/airy_human_map"
     point_cloud_topic: "/airy_points"
     odometry_topic: "/odom"
-    skip_frame: 1
+    skip_frame: 2
 
 lego_loam_ip:
   ros__parameters:

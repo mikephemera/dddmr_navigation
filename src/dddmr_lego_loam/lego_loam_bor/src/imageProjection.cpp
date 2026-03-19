@@ -92,8 +92,6 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
   _ang_resolution_X = (M_PI*2) / (_horizontal_scans);
   _ang_resolution_Y = DEG_TO_RAD*(vertical_angle_top - _ang_bottom) / float(_vertical_scans-1);
   _ang_bottom = -( _ang_bottom - 0.1) * DEG_TO_RAD;
-  _segment_alpha_X = _ang_resolution_X;
-  _segment_alpha_Y = _ang_resolution_Y;
   
   declare_parameter("imageProjection.segment_theta", rclcpp::ParameterValue(0.0));
   this->get_parameter("imageProjection.segment_theta", _segment_theta);

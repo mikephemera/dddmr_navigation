@@ -19,12 +19,12 @@ import pytest
 def generate_test_description():
 
   ### Change test name and TF only
-  test_name = 'mapping_mid360_t13'
+  test_name = 'mapping_c16_t0'
   s2b = Node(
     package="tf2_ros",
     executable="static_transform_publisher",
     output="screen" ,
-    arguments=["0.3", "0.0", "0.38", "0.0", "0.2268928", "0.0", "base_link", "livox_frame"]
+    arguments=["0.3", "0.0", "0.5", "-3.1415926535", "0.0", "0.0", "base_link", "laser_link"]
   )
 
   the_yaml = os.path.join(

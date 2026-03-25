@@ -422,25 +422,25 @@ if(TEST_ENABLED)
   )
 
   #testing node
-  add_executable(mapping_mid360_t13_test_node
-    test/test_node/mapping_mid360_t13_test_node/mapping_mid360_t13_test_node.cpp
+  add_executable(mapping_test_node
+    test/test_node/mapping_test_node.cpp
   )
-  target_link_libraries(mapping_mid360_t13_test_node 
+  target_link_libraries(mapping_test_node 
     opt_icp_gn
     ${PCL_LIBRARIES}
   )
-  ament_target_dependencies(mapping_mid360_t13_test_node
+  ament_target_dependencies(mapping_test_node
     ${dependencies}
   )
 
   install(PROGRAMS
-    test/test_node/mapping_mid360_t13_test_node/mapping_mid360_t13_test_node.py
+    test/test_node/mapping_test_node.py
     DESTINATION lib/${PROJECT_NAME}
   )
 
   #install testing node
   install(TARGETS
-    mapping_mid360_t13_test_node
+    mapping_test_node
     RUNTIME DESTINATION lib/${PROJECT_NAME}
   )
 

@@ -13,15 +13,14 @@
 
 using namespace std::chrono_literals;
 
-class MappingMid360T13TestNode : public rclcpp::Node {
+class MappingTestNode : public rclcpp::Node {
 public:
-  MappingMid360T13TestNode() : Node("mapping_mid360_t13_test_node") {
+  MappingTestNode() : Node("mapping_test_node") {
     trigger_bag_mapping_pub_ =
         this->create_publisher<std_msgs::msg::Bool>("lego_loam_bag_pause", 2);
     timer_ = this->create_wall_timer(
-        100ms, std::bind(&MappingMid360T13TestNode::testCb, this));
-    RCLCPP_INFO(this->get_logger(),
-                "MappingMid360T13TestNode has been started.");
+        100ms, std::bind(&MappingTestNode::testCb, this));
+    RCLCPP_INFO(this->get_logger(), "MappingTestNode: %s has been started.", this->get_name());
   }
 
   bool is_done_ = false;
@@ -82,7 +81,7 @@ private:
       pcl::PointCloud<pcl::PointXYZI>::Ptr result_all(
           new pcl::PointCloud<pcl::PointXYZI>);
 
-      std::string dir_path = "/root/dddmr_bags/cicdtest/mapping_mid360_t13/pg/";
+      std::string dir_path = "/root/dddmr_bags/cicdtest/" + std::string(this->get_name()) + "/pg/";
       if (pcl::io::loadPCDFile<pcl::PointXYZI>(dir_path + "map.pcd",
                                                *golden_map) == -1) {
         RCLCPP_ERROR(this->get_logger(), "Couldn't read file golden map.pcd");
@@ -165,7 +164,7 @@ private:
 
 int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<MappingMid360T13TestNode>();
+  auto node = std::make_shared<MappingTestNode>();
   rclcpp::Rate rate(10);
   while (rclcpp::ok()) {
     if (node->is_done_) {

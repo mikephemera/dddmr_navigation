@@ -89,7 +89,7 @@ DDDMR brings 3D navigation to your wheeled robot, quadruped, humanoid, and more.
 To quickly match this tutorial, here is the hardware setup we use:
 
 <p align='center'>
-  <img src="png1" width="500"/>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/hardware_quadruped.png" width="500" height="250"/>
 </p>
 
 | Component | Model |
@@ -121,21 +121,21 @@ To quickly match this tutorial, here is the hardware setup we use:
 Make sure your `frame_id` in LiDAR topic matches your TF tree:
 
 <p align='center'>
-  <img src="png2" width="200" height="480"/>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/tf_requirement.png" width="150" height="250"/>
 </p>
 
 #### TF Configuration Example
 
-Here is the TF configuration using our quadruped robot as an example. The LiDAR is mounted at `x=0.22m`, `z=0.22m` from `base_link`, and pitched down by 45°:
+Here is the TF configuration using our quadruped robot as an example. The LiDAR is mounted at `x=0.2m`, `z=0.22m` from `base_link`, and pitched down by 45°:
 
 <p align='center'>
-  <img src="png3" width="600"/>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/setup_lidar_testing_quadruped.png" width="400" height="250"/>
 </p>
 
 ```xml
 <!--- TF: x y z yaw pitch roll -->
 <node pkg="tf2_ros" exec="static_transform_publisher" name="sensor2baselink" 
-      args="0.22 0.0 0.22 0.0 0.785 0.0 base_link lidar" />
+      args="0.2 0.0 0.22 0.0 0.785 0.0 base_link lidar" />
 ```
 
 > **Note:** 45° ≈ 0.785 rad. Pitch down.
@@ -153,18 +153,15 @@ Here is the TF configuration using our quadruped robot as an example. The LiDAR 
 DDDMR supports three navigation workflows:
 
 <p align='center'>
-  <img src="png4" width="580"/>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/dddmr_nav_workflows.png" width="600" height="450"/>
 </p>
 
-| Workflow | Description |
-|:--------:|:------------|
-| **① Offline mapping + Nav** | Record bag → Offline mapping → Save map → Localization → Navigation |
-| **② Online mapping + Nav** | Online mapping → Save map → Localization → Navigation **(★ This tutorial)** |
-| **③ Exploration mode** | Online mapping + Localization + Navigation (simultaneous) |
+> **Note:** This tutorial follows **② Online mapping + Nav** workflow.
 
 ---
 
-## 🚧 Standard Mode - Mapping
+
+## 🚧 Mapping
 
 Before starting, make sure your robot is publishing the required topics:
 
@@ -181,7 +178,7 @@ ros2 launch dddmr_beginner_guide airy_tilt45_mapping.launch
 After launching, you should see the RViz interface like this:
 
 <p align='center'>
-  <img src="png5" width="700"/>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/mapping_realrobot_rviz.png" width="800" height="500"/>
 </p>
 
 When you drive your robot around, you will notice:
@@ -199,7 +196,7 @@ ros2 service call /save_mapped_point_cloud std_srvs/srv/Empty
 ```
 
 <p align='center'>
-  <img src="png6" width="700"/>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/map_save_.png" width="500" height="250"/>
 </p>
 
 When you see `Create dir:` in the terminal, it means the map has been saved. If you are done mapping, you can close the mapping node.
@@ -214,14 +211,14 @@ mv /tmp/2026_03_28_19_25_15/ /root/dddmr_bags/
 
 ---
 
-## 🚧 Standard Mode - Localization + Navigation
+## 🚧 Localization + Navigation
 
 First, open the configuration file and set your map path:
 
 📄 `config/airy_tilt45_navigation.yaml`
 
 <p align='center'>
-  <img src="png7" width="700"/>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/robot_map_location.png" width="500" height="500"/>
 </p>
 
 Change `pose_graph_dir` to your map folder:
@@ -239,7 +236,7 @@ ros2 launch dddmr_beginner_guide airy_tilt45_navigation.launch
 ```
 
 <p align='center'>
-  <img src="png8" width="700"/>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/LOC_NAV_realrobot_rviz.png" width="800" height="500"/>
 </p>
 
 ### Step 1: Give Initial Pose

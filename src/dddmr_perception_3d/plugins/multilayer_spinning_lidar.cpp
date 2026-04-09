@@ -102,6 +102,10 @@ void MultiLayerSpinningLidar::onInitialize()
   node_->get_parameter(name_ + ".euclidean_cluster_extraction_min_cluster_size", euclidean_cluster_extraction_min_cluster_size_);
   RCLCPP_INFO(node_->get_logger().get_child(name_), "euclidean_cluster_extraction_min_cluster_size: %d", euclidean_cluster_extraction_min_cluster_size_);
 
+  node_->declare_parameter(name_ + ".euclidean_cluster_minimum_accepted_size", rclcpp::ParameterValue(10));
+  node_->get_parameter(name_ + ".euclidean_cluster_minimum_accepted_size", euclidean_cluster_minimum_accepted_size_);
+  RCLCPP_INFO(node_->get_logger().get_child(name_), "euclidean_cluster_minimum_accepted_size: %d", euclidean_cluster_minimum_accepted_size_);
+
   clock_ = node_->get_clock();
   last_observation_time_ = clock_->now();
 
@@ -371,14 +375,17 @@ void MultiLayerSpinningLidar::selfMark(){
       cloud_clusters->points.push_back(i_pt);
 
     }
+
+    if(cloud_cluster->points.size()<euclidean_cluster_minimum_accepted_size_)
+      continue;
+
     centroid.x/=it->indices.size();
     centroid.y/=it->indices.size();
     centroid.z/=it->indices.size();
     centroid.intensity = intensity_cnt;
     cloud_clusters->points.push_back(centroid);   
     intensity_cnt += 100;
- 
-
+    
     //@ Sometimes the lidar accidently add ground scan (due to lego loam did not segment them correctly)
     //@ Therefore we implement following temporal solution -> when cluster center attaches ground, ignore it!
     std::vector<int> id(1);

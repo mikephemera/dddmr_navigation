@@ -23,6 +23,10 @@ SemanticSegmentation2PointCloud::SemanticSegmentation2PointCloud(std::string nam
   downSizeFilter_intensity_.setLeafSize(leaf_size_, leaf_size_, leaf_size_);
   downSizeFilter_rgb_.setLeafSize(leaf_size_, leaf_size_, leaf_size_);
   
+  this->declare_parameter("exclude_class", rclcpp::PARAMETER_INTEGER_ARRAY);
+  rclcpp::Parameter exclude_class= this->get_parameter("exclude_class");
+  exclude_class_vector_ = exclude_class.as_integer_array();
+
   cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("sematic_segmentation_point_cloud", 2);
 
   cbs_group2_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -76,6 +80,7 @@ void SemanticSegmentation2PointCloud::cbMaskDepthImg(const sensor_msgs::msg::Ima
     {
       for (unsigned int u = 0; u < depth->width; u+=sample_step_)
       {
+
         pcl::PointXYZI pt;
         float z = cv_image_->image.at<unsigned short>(v, u) * 0.001;
         char semantic_segmentation_class = 0;
@@ -96,6 +101,10 @@ void SemanticSegmentation2PointCloud::cbMaskDepthImg(const sensor_msgs::msg::Ima
         }
         else // Fill in XYZ
         {
+          auto it = std::find(exclude_class_vector_.begin(), exclude_class_vector_.end(), int(semantic_segmentation_class));
+          if ( it!= exclude_class_vector_.end()) {
+            continue;
+          }
           pt.x = (u - cx) * z * fx;
           pt.y = (v - cy) * z * fy;
           pt.z = z;

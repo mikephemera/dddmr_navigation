@@ -50,13 +50,11 @@ MapOptimization::MapOptimization(std::string name,
   parameters.relinearizeSkip = 1;
   isam = new ISAM2(parameters);
   pose_graph_.clear();
-  
-  tf_static_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
-
-  srvSavePCD = this->create_service<std_srvs::srv::Empty>("save_mapped_point_cloud", std::bind(&MapOptimization::pcdSaver, this, std::placeholders::_1, std::placeholders::_2));
+  has_m2ci_af3_ = false;
+  current_ground_size_ = 0;
 
   pub_key_pose_arr_ = this->create_publisher<geometry_msgs::msg::PoseArray>("key_poses", 1);
-  
+
   pub_pose_graph_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("pose_graph", rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
   pubLaserCloudSurround = this->create_publisher<sensor_msgs::msg::PointCloud2>("laser_cloud_surround", 1);  
@@ -66,13 +64,18 @@ MapOptimization::MapOptimization(std::string name,
   pubIcpTargetKeyFrames = this->create_publisher<sensor_msgs::msg::PointCloud2>("loopclosure_target_cloud", 1);  
 
   pubIcpKeyFrames = this->create_publisher<sensor_msgs::msg::PointCloud2>("corrected_cloud", 1);  
+
+  pubcloudKeyPoses6D = this->create_publisher<sensor_msgs::msg::PointCloud2>("cloud_keypose_6d", 1);  
   
   pubRecentCornerKeyFrames = this->create_publisher<sensor_msgs::msg::PointCloud2>("recent_corner_cloud", 1);
   pubRecentSurfKeyFrames = this->create_publisher<sensor_msgs::msg::PointCloud2>("recent_surf_cloud", 1);
   pubLastOptimizedCornerKeyFrames = this->create_publisher<sensor_msgs::msg::PointCloud2>("optimized_corner_cloud", 1);
   pubLastOptimizedSurfKeyFrames = this->create_publisher<sensor_msgs::msg::PointCloud2>("optimized_surf_cloud", 1);
   pubSelectedCloudForLMOptimization = this->create_publisher<sensor_msgs::msg::PointCloud2>("selected_lm_cloud", 1);
-
+  
+  pubM2Ci = this->create_publisher<geometry_msgs::msg::TransformStamped>("lego_loam/m2ci", 1);  
+  pubC2S = this->create_publisher<geometry_msgs::msg::TransformStamped>("lego_loam/c2s", 1);  
+  pubB2S = this->create_publisher<geometry_msgs::msg::TransformStamped>("lego_loam/c2s", 1);  
   pubMap = this->create_publisher<sensor_msgs::msg::PointCloud2>("lego_loam_map", 1);  
   pubGround = this->create_publisher<sensor_msgs::msg::PointCloud2>("lego_loam_ground", 1);  
   pubGroundEdge = this->create_publisher<sensor_msgs::msg::PointCloud2>("lego_loam_ground_edge", 1);
@@ -134,37 +137,58 @@ MapOptimization::MapOptimization(std::string name,
   this->get_parameter("mapping.ground_edge_threshold_num", ground_edge_threshold_num_);
   RCLCPP_INFO(this->get_logger(), "mapping.ground_edge_threshold_num: %d", ground_edge_threshold_num_);
 
+  declare_parameter("mapping.broadcast_external_odom_tf", rclcpp::ParameterValue(true));
+  this->get_parameter("mapping.broadcast_external_odom_tf", broadcast_external_odom_tf_);
+  RCLCPP_INFO(this->get_logger(), "mapping.broadcast_external_odom_tf: %d", broadcast_external_odom_tf_);
+
+  declare_parameter("mapping.generate_testing_pg", rclcpp::ParameterValue(false));
+  this->get_parameter("mapping.generate_testing_pg", generate_testing_pg_);
+  RCLCPP_INFO(this->get_logger(), "mapping.generate_testing_pg: %d", generate_testing_pg_);  
+  
   allocateMemory();
 
   timer_run_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   timer_pub_gbl_map_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   timer_loop_closure_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  get_key_frame_srv_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+
+  srvSavePCD = this->create_service<std_srvs::srv::Empty>("save_mapped_point_cloud", std::bind(&MapOptimization::pcdSaver, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, get_key_frame_srv_cb_group_);
+  srvGetKeyFrameCloud = this->create_service<dddmr_sys_core::srv::GetKeyFrameCloud>("get_key_frame_cloud", std::bind(&MapOptimization::getKeyFrameCloud, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, get_key_frame_srv_cb_group_);
 
   timer_run_ = this->create_wall_timer(1ms, std::bind(&MapOptimization::run, this), timer_run_cb_group_);
-  timer_pub_gbl_map_ = this->create_wall_timer(500ms, std::bind(&MapOptimization::publishGlobalMapThread, this), timer_pub_gbl_map_cb_group_);
   timer_loop_closure_ = this->create_wall_timer(1000ms, std::bind(&MapOptimization::loopClosureThread, this), timer_loop_closure_cb_group_);
-  timer_ground_edge_detection_ = this->create_wall_timer(500ms, std::bind(&MapOptimization::groundEdgeDetectionThread, this), timer_pub_gbl_map_cb_group_);
+  //timer_ground_edge_detection_ = this->create_wall_timer(200ms, std::bind(&MapOptimization::groundEdgeDetectionThread, this), timer_pub_gbl_map_cb_group_);
 
-  //@ Generate map2camera_init. This will be used to export final point cloud/pose graph based on map frame
-  //@ "0 0 0 pi/2 0 pi/2 map -> camera_init" and "0 0 0 -pi/2 -pi/2 0 camera -> base_link"
-  //@affine_3d for pcl conversion, tf2::stamped for key_pose
-  geometry_msgs::msg::TransformStamped trans_m2ci;
-  trans_m2ci.header.frame_id = "map";
-  trans_m2ci.child_frame_id = "camera_init";
-  trans_m2ci.transform.translation.x = 0.0; trans_m2ci.transform.translation.y = 0.0; trans_m2ci.transform.translation.z = 0.0;
-  trans_m2ci.transform.rotation.x = 0.5; trans_m2ci.transform.rotation.y = 0.5;
-  trans_m2ci.transform.rotation.z = 0.5; trans_m2ci.transform.rotation.w = 0.5;
+}
 
-  geometry_msgs::msg::TransformStamped trans_c2sensorlink;
-  trans_c2sensorlink.transform.translation.x = 0.0; trans_c2sensorlink.transform.translation.y = 0.0; trans_c2sensorlink.transform.translation.z = 0.0;
-  trans_c2sensorlink.transform.rotation.x = -0.5; trans_c2sensorlink.transform.rotation.y = -0.5;
-  trans_c2sensorlink.transform.rotation.z = -0.5; trans_c2sensorlink.transform.rotation.w = 0.5;
+void MapOptimization::getKeyFrameCloud(const std::shared_ptr<dddmr_sys_core::srv::GetKeyFrameCloud::Request> request,
+          std::shared_ptr<dddmr_sys_core::srv::GetKeyFrameCloud::Response> response){
+
+  pcl::PointCloud<PointType>::Ptr keyFrameBaseLink;
+  keyFrameBaseLink.reset(new pcl::PointCloud<PointType>());
+  pcl::toROSMsg(*keyFrameBaseLink, response->key_frame_cloud);
+  pcl::toROSMsg(*keyFrameBaseLink, response->key_frame_ground);
+  pcl::toROSMsg(*keyFrameBaseLink, response->key_frame_ground_edge);
   
-  tf_static_broadcaster_->sendTransform(trans_m2ci);
+  if(!has_m2ci_af3_) return;
   
-  trans_m2ci_af3_ = tf2::transformToEigen(trans_m2ci); //for pcl conversion
-  tf2_trans_m2ci_.setRotation(tf2::Quaternion(trans_m2ci.transform.rotation.x, trans_m2ci.transform.rotation.y, trans_m2ci.transform.rotation.z, trans_m2ci.transform.rotation.w));
-  tf2_trans_m2ci_.setOrigin(tf2::Vector3(trans_m2ci.transform.translation.x, trans_m2ci.transform.translation.y, trans_m2ci.transform.translation.z));
+  if(request->key_frame_number>=cornerCloudKeyFrames.size())
+    return;
+
+  if(request->key_frame_number>=patchedGroundKeyFrames.size())
+    return;
+
+  if(request->key_frame_number>=patchedGroundEdgeKeyFrames.size())
+    return;
+
+  if(request->key_frame_number>=cloudKeyPoses6D->size())
+    return;
+
+  *keyFrameBaseLink = *cornerCloudKeyFrames[request->key_frame_number] + *outlierCloudKeyFrames[request->key_frame_number];
+  
+  pcl::toROSMsg(*keyFrameBaseLink, response->key_frame_cloud);
+  pcl::toROSMsg(*patchedGroundKeyFrames[request->key_frame_number], response->key_frame_ground);
+  pcl::toROSMsg(*patchedGroundEdgeKeyFrames[request->key_frame_number], response->key_frame_ground_edge);
 
 }
 
@@ -176,7 +200,17 @@ void MapOptimization::pcdSaver(const std::shared_ptr<std_srvs::srv::Empty::Reque
 
   std::string mapping_dir_string;
   auto env_p = std::getenv("DDDMR_MAPPING_DIR");
-  if ( env_p == NULL ) {
+  if(generate_testing_pg_){
+    mapping_dir_string = std::string("/tmp/testing_pg");
+    try {
+      std::uintmax_t removed_count = std::filesystem::remove_all(mapping_dir_string); 
+      RCLCPP_INFO(this->get_logger(), "Generate testing pg is enabled, removing dir: %s", mapping_dir_string.c_str());
+    } catch (const std::filesystem::filesystem_error& e) {
+    }
+    std::filesystem::create_directory(mapping_dir_string);
+    RCLCPP_INFO(this->get_logger(), "Generate testing pg is enabled, create dir: %s", mapping_dir_string.c_str());
+  }
+  else if ( env_p == NULL ) {
     mapping_dir_string = std::string("/tmp/") + currentDateTime();
     std::filesystem::create_directory(mapping_dir_string);
     RCLCPP_INFO(this->get_logger(), "Create dir: %s", mapping_dir_string.c_str());
@@ -227,27 +261,27 @@ void MapOptimization::pcdSaver(const std::shared_ptr<std_srvs::srv::Empty::Reque
     //    *transformPointCloud(outlierCloudKeyFrames[thisKeyInd],
     //                         &cloudKeyPoses6D->points[thisKeyInd]);
   }
-  
+
   //@ -----Write poses-----
   pcl::PointCloud<PointTypePose> cloudKeyPoses6DBaseLink;
+  std::vector<geometry_msgs::msg::TransformStamped> cloudKeyPoses6DBaseLink_geo;
   for(auto it = cloudKeyPoses6D->points.begin(); it!=cloudKeyPoses6D->points.end(); it++){
-    tf2::Transform key_pose_ci2c;
+    tf2::Transform tf2_trans_ci2c;
     tf2::Quaternion q;
     q.setRPY( (*it).roll, (*it).pitch, (*it).yaw);
-    key_pose_ci2c.setRotation(q);
-    key_pose_ci2c.setOrigin(tf2::Vector3((*it).x, (*it).y, (*it).z));
+    tf2_trans_ci2c.setRotation(q);
+    tf2_trans_ci2c.setOrigin(tf2::Vector3((*it).x, (*it).y, (*it).z));
 
-    tf2::Transform key_pose_ci2b;
-    key_pose_ci2b.mult(key_pose_ci2c, tf2_trans_c2s_);
+    tf2::Transform tf2_trans_m2c, tf2_trans_m2s, tf2_trans_m2b;
+    tf2_trans_m2c.mult(tf2_trans_m2ci_, tf2_trans_ci2c);
+    tf2_trans_m2s.mult(tf2_trans_m2c, tf2_trans_c2s_);
+    tf2_trans_m2b.mult(tf2_trans_m2s, tf2_trans_b2s_.inverse());
 
-    tf2::Transform key_pose_m2b;
-    key_pose_m2b.mult(tf2_trans_m2ci_, key_pose_ci2b);
-    
     PointTypePose pt;
-    pt.x = key_pose_m2b.getOrigin().x();
-    pt.y = key_pose_m2b.getOrigin().y();
-    pt.z = key_pose_m2b.getOrigin().z();
-    tf2::Matrix3x3 m(key_pose_m2b.getRotation());
+    pt.x = tf2_trans_m2b.getOrigin().x();
+    pt.y = tf2_trans_m2b.getOrigin().y();
+    pt.z = tf2_trans_m2b.getOrigin().z();
+    tf2::Matrix3x3 m(tf2_trans_m2b.getRotation());
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
     pt.roll = roll;
@@ -255,6 +289,16 @@ void MapOptimization::pcdSaver(const std::shared_ptr<std_srvs::srv::Empty::Reque
     pt.yaw = yaw;
     pt.intensity = (*it).intensity;
     cloudKeyPoses6DBaseLink.push_back(pt);
+
+    geometry_msgs::msg::TransformStamped pose_6d_geo;
+    pose_6d_geo.transform.translation.x = tf2_trans_m2b.getOrigin().x();
+    pose_6d_geo.transform.translation.y = tf2_trans_m2b.getOrigin().y();
+    pose_6d_geo.transform.translation.z = tf2_trans_m2b.getOrigin().z();
+    pose_6d_geo.transform.rotation.x = tf2_trans_m2b.getRotation().x();
+    pose_6d_geo.transform.rotation.y = tf2_trans_m2b.getRotation().y();
+    pose_6d_geo.transform.rotation.z = tf2_trans_m2b.getRotation().z();
+    pose_6d_geo.transform.rotation.w = tf2_trans_m2b.getRotation().w();
+    cloudKeyPoses6DBaseLink_geo.push_back(pose_6d_geo);
   }  
   pcl::io::savePCDFileASCII(mapping_dir_string + "/poses.pcd", cloudKeyPoses6DBaseLink);
   
@@ -275,20 +319,29 @@ void MapOptimization::pcdSaver(const std::shared_ptr<std_srvs::srv::Empty::Reque
   std::string pcd_dir = mapping_dir_string + "/pcd";
   std::filesystem::create_directory(pcd_dir);
   for (int i = 0; i < cloudKeyPoses6D->points.size(); ++i) {
+
+    Eigen::Affine3d af3 = tf2::transformToEigen(cloudKeyPoses6DBaseLink_geo[i]);
+
     keyFrameCorner.reset(new pcl::PointCloud<PointType>());
     int thisKeyInd = (int)cloudKeyPoses6D->points[i].intensity;
     *keyFrameCorner += (*cornerCloudKeyFrames[thisKeyInd]);
-    pcl::transformPointCloud(*keyFrameCorner, *keyFrameCorner, trans_s2c_af3_);
+    *keyFrameCorner= *transformPointCloud(keyFrameCorner, &cloudKeyPoses6D->points[i]);
+    pcl::transformPointCloud(*keyFrameCorner, *keyFrameCorner, trans_m2ci_af3_);
+    pcl::transformPointCloud(*keyFrameCorner, *keyFrameCorner, af3.inverse());
     pcl::io::savePCDFileASCII(pcd_dir + "/" + std::to_string(thisKeyInd) + "_feature.pcd", *keyFrameCorner);
 
     keyFrameGround.reset(new pcl::PointCloud<PointType>());
     *keyFrameGround += (*patchedGroundKeyFrames[thisKeyInd]);
-    pcl::transformPointCloud(*keyFrameGround, *keyFrameGround, trans_s2c_af3_);
+    *keyFrameGround= *transformPointCloud(keyFrameGround, &cloudKeyPoses6D->points[i]);
+    pcl::transformPointCloud(*keyFrameGround, *keyFrameGround, trans_m2ci_af3_);
+    pcl::transformPointCloud(*keyFrameGround, *keyFrameGround, af3.inverse());
     pcl::io::savePCDFileASCII(pcd_dir + "/" + std::to_string(thisKeyInd) + "_ground.pcd", *keyFrameGround);
 
     keyFrameSurface.reset(new pcl::PointCloud<PointType>());
     *keyFrameSurface += (*surfCloudKeyFrames[thisKeyInd]);
-    pcl::transformPointCloud(*keyFrameSurface, *keyFrameSurface, trans_s2c_af3_);
+    *keyFrameSurface= *transformPointCloud(keyFrameSurface, &cloudKeyPoses6D->points[i]);
+    pcl::transformPointCloud(*keyFrameSurface, *keyFrameSurface, trans_m2ci_af3_);
+    pcl::transformPointCloud(*keyFrameSurface, *keyFrameSurface, af3.inverse());
     pcl::io::savePCDFileASCII(pcd_dir + "/" + std::to_string(thisKeyInd) + "_surface.pcd", *keyFrameSurface);
   }  
 
@@ -402,14 +455,6 @@ void MapOptimization::allocateMemory() {
 
   latestFrameID = 0;
 }
-
-
-void MapOptimization::publishGlobalMapThread()
-{
-  copyPosesAndFrames();
-  publishGlobalMap();
-}
-
 
 void MapOptimization::loopClosureThread()
 {
@@ -668,22 +713,24 @@ void MapOptimization::publishTF() {
   tf2_trans_ci2c.setOrigin(tf2::Vector3(transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5]));
   tf2_trans_ci2c.setRotation(tf2::Quaternion(-geoQuat.y, -geoQuat.z, geoQuat.x, geoQuat.w));
   
-  tf2_trans_o2b.setOrigin(tf2::Vector3(wheelOdometry.pose.pose.position.x, wheelOdometry.pose.pose.position.y, wheelOdometry.pose.pose.position.z));
-  tf2_trans_o2b.setRotation(tf2::Quaternion(wheelOdometry.pose.pose.orientation.x, wheelOdometry.pose.pose.orientation.y, wheelOdometry.pose.pose.orientation.z, wheelOdometry.pose.pose.orientation.w));
+  tf2_trans_o2b.setOrigin(tf2::Vector3(externalOdometry.pose.pose.position.x, externalOdometry.pose.pose.position.y, externalOdometry.pose.pose.position.z));
+  tf2_trans_o2b.setRotation(tf2::Quaternion(externalOdometry.pose.pose.orientation.x, externalOdometry.pose.pose.orientation.y, externalOdometry.pose.pose.orientation.z, externalOdometry.pose.pose.orientation.w));
 
   tf2::Stamped<tf2::Transform> tf2_trans_m2c;
+  tf2::Stamped<tf2::Transform> tf2_trans_m2s;
   tf2::Stamped<tf2::Transform> tf2_trans_m2b;
   tf2::Stamped<tf2::Transform> tf2_trans_m2o;
 
   tf2_trans_m2c.mult(tf2_trans_m2ci_, tf2_trans_ci2c);
-  tf2_trans_m2b.mult(tf2_trans_m2c, tf2_trans_c2b_);
+  tf2_trans_m2s.mult(tf2_trans_m2c, tf2_trans_c2s_);
+  tf2_trans_m2b.mult(tf2_trans_m2s, tf2_trans_b2s_.inverse());
   tf2_trans_m2o.mult(tf2_trans_m2b, tf2_trans_o2b.inverse());
   
   geometry_msgs::msg::TransformStamped map2odom;
   map2odom.header.frame_id = "map";
 
-  map2odom.header.stamp = wheelOdometry.header.stamp;
-  map2odom.child_frame_id = wheelOdometry.header.frame_id;
+  map2odom.header.stamp = externalOdometry.header.stamp;
+  map2odom.child_frame_id = externalOdometry.header.frame_id;
   map2odom.transform.rotation.x = tf2_trans_m2o.getRotation().x();
   map2odom.transform.rotation.y = tf2_trans_m2o.getRotation().y();
   map2odom.transform.rotation.z = tf2_trans_m2o.getRotation().z();
@@ -693,18 +740,18 @@ void MapOptimization::publishTF() {
   map2odom.transform.translation.z = tf2_trans_m2o.getOrigin().z();
   tf_broadcaster_->sendTransform(map2odom);
 
-  if(broadcast_odom_tf_){
+  if(broadcast_external_odom_tf_){
     geometry_msgs::msg::TransformStamped odom2baselink;
     odom2baselink.header.stamp = map2odom.header.stamp;
     odom2baselink.header.frame_id = map2odom.child_frame_id;
-    odom2baselink.child_frame_id = wheelOdometry.child_frame_id;
-    odom2baselink.transform.rotation.x = wheelOdometry.pose.pose.orientation.x;
-    odom2baselink.transform.rotation.y = wheelOdometry.pose.pose.orientation.y;
-    odom2baselink.transform.rotation.z = wheelOdometry.pose.pose.orientation.z;
-    odom2baselink.transform.rotation.w = wheelOdometry.pose.pose.orientation.w;
-    odom2baselink.transform.translation.x = wheelOdometry.pose.pose.position.x;
-    odom2baselink.transform.translation.y = wheelOdometry.pose.pose.position.y;
-    odom2baselink.transform.translation.z = wheelOdometry.pose.pose.position.z;
+    odom2baselink.child_frame_id = externalOdometry.child_frame_id;
+    odom2baselink.transform.rotation.x = externalOdometry.pose.pose.orientation.x;
+    odom2baselink.transform.rotation.y = externalOdometry.pose.pose.orientation.y;
+    odom2baselink.transform.rotation.z = externalOdometry.pose.pose.orientation.z;
+    odom2baselink.transform.rotation.w = externalOdometry.pose.pose.orientation.w;
+    odom2baselink.transform.translation.x = externalOdometry.pose.pose.position.x;
+    odom2baselink.transform.translation.y = externalOdometry.pose.pose.position.y;
+    odom2baselink.transform.translation.z = externalOdometry.pose.pose.position.z;
     tf_broadcaster_->sendTransform(odom2baselink);
   }
 }
@@ -712,34 +759,44 @@ void MapOptimization::publishTF() {
 void MapOptimization::publishKeyPosesAndFrames() {
   std::lock_guard<std::mutex> lock(mtx);
   
+  if(!has_m2ci_af3_)
+    return;
+
+  pubM2Ci->publish(trans_m2ci_);
+  pubC2S->publish(trans_c2s_);
+  pubB2S->publish(trans_b2s_);
+
   geometry_msgs::msg::PoseArray pose_array;
   for(auto it = cloudKeyPoses6D->points.begin(); it!=cloudKeyPoses6D->points.end(); it++){
-    tf2::Transform key_pose_ci2c;
+    tf2::Transform tf2_trans_ci2c;
     tf2::Quaternion q;
     q.setRPY( (*it).roll, (*it).pitch, (*it).yaw);
-    key_pose_ci2c.setRotation(q);
-    key_pose_ci2c.setOrigin(tf2::Vector3((*it).x, (*it).y, (*it).z));
+    tf2_trans_ci2c.setRotation(q);
+    tf2_trans_ci2c.setOrigin(tf2::Vector3((*it).x, (*it).y, (*it).z));
 
-    tf2::Transform key_pose_ci2b;
-    key_pose_ci2b.mult(key_pose_ci2c, tf2_trans_c2s_);
+    tf2::Stamped<tf2::Transform> tf2_trans_m2c;
+    tf2::Stamped<tf2::Transform> tf2_trans_m2s;
+    tf2::Stamped<tf2::Transform> tf2_trans_m2b;
 
-    tf2::Transform key_pose_m2b;
-    key_pose_m2b.mult(tf2_trans_m2ci_, key_pose_ci2b);
+    tf2_trans_m2c.mult(tf2_trans_m2ci_, tf2_trans_ci2c);
+    tf2_trans_m2s.mult(tf2_trans_m2c, tf2_trans_c2s_);
+    tf2_trans_m2b.mult(tf2_trans_m2s, tf2_trans_b2s_.inverse());
 
     geometry_msgs::msg::Pose a_pose;
-    a_pose.position.x = key_pose_m2b.getOrigin().x();
-    a_pose.position.y = key_pose_m2b.getOrigin().y();
-    a_pose.position.z = key_pose_m2b.getOrigin().z();
-    a_pose.orientation.x = key_pose_m2b.getRotation().x();
-    a_pose.orientation.y = key_pose_m2b.getRotation().y();
-    a_pose.orientation.z = key_pose_m2b.getRotation().z();
-    a_pose.orientation.w = key_pose_m2b.getRotation().w();
+    a_pose.position.x = tf2_trans_m2b.getOrigin().x();
+    a_pose.position.y = tf2_trans_m2b.getOrigin().y();
+    a_pose.position.z = tf2_trans_m2b.getOrigin().z();
+    a_pose.orientation.x = tf2_trans_m2b.getRotation().x();
+    a_pose.orientation.y = tf2_trans_m2b.getRotation().y();
+    a_pose.orientation.z = tf2_trans_m2b.getRotation().z();
+    a_pose.orientation.w = tf2_trans_m2b.getRotation().w();
     pose_array.poses.push_back(a_pose);
   }
   pose_array.header.frame_id = "map";
   pose_array.header.stamp = clock_->now();
   pub_key_pose_arr_->publish(pose_array);
-  
+
+
   //@visualize edge
   visualization_msgs::msg::MarkerArray markerArray;
   int cnt = 0;
@@ -791,96 +848,12 @@ void MapOptimization::publishKeyPosesAndFrames() {
   }
   pub_pose_graph_->publish(markerArray);
   
-}
-
-void MapOptimization::copyPosesAndFrames(){
+  sensor_msgs::msg::PointCloud2 cloud_msg_pose_6d;
+  pcl::toROSMsg(*cloudKeyPoses6D, cloud_msg_pose_6d);
+  cloud_msg_pose_6d.header.stamp = timeLaserOdometry_header_.stamp;
+  cloud_msg_pose_6d.header.frame_id = "map";
+  pubcloudKeyPoses6D->publish(cloud_msg_pose_6d);
   
-  if (cloudKeyPoses3D->points.empty() == true) return;
-
-  // mutex lock for copy only, so we will not be delay by global map visualization
-  std::lock_guard<std::mutex> lock(mtx);
-
-  cloudKeyPoses6D_Copy.reset(new pcl::PointCloud<PointTypePose>());
-  for (int i = 0; i < cloudKeyPoses6D->points.size(); ++i) {
-    cloudKeyPoses6D_Copy->push_back(cloudKeyPoses6D->points[i]);
-  }
-  
-  cornerCloudKeyFramesVisualization_Copy.clear();
-  for (int i = 0; i < cloudKeyPoses6D->points.size(); ++i) {
-    pcl::PointCloud<PointType>::Ptr temp_frame;
-    temp_frame.reset(new pcl::PointCloud<PointType>());
-    *temp_frame = *cornerCloudKeyFramesVisualization[i];
-    cornerCloudKeyFramesVisualization_Copy.push_back(temp_frame);
-  }
-
-  patchedGroundKeyFrames_Copy.clear();
-  for (int i = 0; i < patchedGroundKeyFrames.size(); ++i) {
-    pcl::PointCloud<PointType>::Ptr temp_frame;
-    temp_frame.reset(new pcl::PointCloud<PointType>());
-    *temp_frame = *patchedGroundKeyFrames[i];
-    patchedGroundKeyFrames_Copy.push_back(temp_frame);
-  }
-
-  patchedGroundEdgeProcessedKeyFrames_Copy.clear();  
-  for (int i = 0; i < patchedGroundEdgeProcessedKeyFrames.size(); ++i) {
-    pcl::PointCloud<PointType>::Ptr temp_frame;
-    temp_frame.reset(new pcl::PointCloud<PointType>());
-    *temp_frame = *patchedGroundEdgeProcessedKeyFrames[i];
-    patchedGroundEdgeProcessedKeyFrames_Copy.push_back(temp_frame);
-  }
-}
-
-void MapOptimization::publishGlobalMap() {
-  
-  if (cloudKeyPoses3D->points.empty() == true) return;
-
-  for (int i = 0; i < cloudKeyPoses6D_Copy->points.size(); ++i) {
-    *globalMapKeyFrames += *transformPointCloud(
-        cornerCloudKeyFramesVisualization_Copy[i], &cloudKeyPoses6D_Copy->points[i]);
-    *globalMapKeyFrames += *transformPointCloud(
-        outlierCloudKeyFrames[i], &cloudKeyPoses6D_Copy->points[i]);
-  }
-
-  //@ transform to map frame --> z pointing to sky
-  pcl::transformPointCloud(*globalMapKeyFrames, *globalMapKeyFrames, trans_m2ci_af3_);
-  downSizeFilterGlobalMapKeyFrames.setInputCloud(globalMapKeyFrames);
-  downSizeFilterGlobalMapKeyFrames.filter(*globalMapKeyFrames);
-  sensor_msgs::msg::PointCloud2 cloud_msg_map;
-  pcl::toROSMsg(*globalMapKeyFrames, cloud_msg_map);
-  cloud_msg_map.header.stamp = timeLaserOdometry_header_.stamp;
-  cloud_msg_map.header.frame_id = "map";
-  pubMap->publish(cloud_msg_map);
-  
-  for (int i = 0; i < patchedGroundEdgeProcessedKeyFrames_Copy.size(); ++i) {
-    pcl::PointCloud<PointType>::Ptr temp_frame;
-    temp_frame = transformPointCloud(patchedGroundKeyFrames_Copy[i], &cloudKeyPoses6D_Copy->points[i]);
-    downSizeFilterGlobalGroundKeyFrames_Copy.setInputCloud(temp_frame);
-    downSizeFilterGlobalGroundKeyFrames_Copy.filter(*temp_frame);
-    *globalGroundKeyFrames += *temp_frame;
-  }
-  
-  for (int i = 0; i < patchedGroundEdgeProcessedKeyFrames_Copy.size(); ++i) {
-    pcl::PointCloud<PointType>::Ptr temp_frame;
-    temp_frame = transformPointCloud(patchedGroundEdgeProcessedKeyFrames_Copy[i], &cloudKeyPoses6D_Copy->points[i]);
-    downSizeFilterGlobalGroundKeyFrames_Copy.setInputCloud(temp_frame);
-    downSizeFilterGlobalGroundKeyFrames_Copy.filter(*temp_frame);
-    *globalGroundKeyFrames += *temp_frame;
-  }
-  
-  std::lock_guard<std::mutex> lock(mtx);
-  //@ transform to map frame --> z pointing to sky
-  pcl::transformPointCloud(*globalGroundKeyFrames, *globalGroundKeyFrames, trans_m2ci_af3_);
-  downSizeFilterGlobalGroundKeyFrames_Copy.setInputCloud(globalGroundKeyFrames);
-  downSizeFilterGlobalGroundKeyFrames_Copy.filter(*globalGroundKeyFrames);
-  sensor_msgs::msg::PointCloud2 cloud_msg_ground;
-  pcl::toROSMsg(*globalGroundKeyFrames, cloud_msg_ground);
-  cloud_msg_ground.header.stamp = timeLaserOdometry_header_.stamp;
-  cloud_msg_ground.header.frame_id = "map";
-  pubGround->publish(cloud_msg_ground);
-  
-
-  globalMapKeyFrames.reset(new pcl::PointCloud<PointType>());
-  globalGroundKeyFrames.reset(new pcl::PointCloud<PointType>());
 }
 
 bool MapOptimization::detectLoopClosure() {
@@ -989,8 +962,17 @@ bool MapOptimization::detectLoopClosure() {
   pass.filter (*latestSurfKeyFrameCloudBaseLinkFrame_Pass);
 
   if( latestSurfKeyFrameCloudBaseLinkFrame_Pass->points.size() > original_size/2){
-    RCLCPP_WARN(this->get_logger(), "Too clustered! In range: %lu, overall: %lu, ignore loop closure.", latestSurfKeyFrameCloudBaseLinkFrame_Pass->points.size(), original_size);
-    return false;
+    double dx = cloudKeyPoses6D->points[latestFrameIDLoopCloure].x - cloudKeyPoses6D->points[closestHistoryFrameID].x;
+    double dy = cloudKeyPoses6D->points[latestFrameIDLoopCloure].y - cloudKeyPoses6D->points[closestHistoryFrameID].y;
+    double dz = cloudKeyPoses6D->points[latestFrameIDLoopCloure].z - cloudKeyPoses6D->points[closestHistoryFrameID].z;
+    if(sqrt(dx*dx+dy*dy+dz*dz)<1.0){
+
+    }
+    else{
+      RCLCPP_WARN(this->get_logger(), "Too clustered! In range: %lu points, overall: %lu points. Distance between two frame is higher than 1.0 m, ignore loop closure.", latestSurfKeyFrameCloudBaseLinkFrame_Pass->points.size(), original_size);
+      return false;
+    }
+
   }
   
   // check continuity between two frame from current to candidate
@@ -1242,142 +1224,20 @@ void MapOptimization::extractSurroundingKeyFrames() {
   }
   
   // Downsample the surrounding corner key frames (or map)
+  std::vector<int> indices_tmp1;
+  laserCloudCornerFromMap->is_dense = false;
+  pcl::removeNaNFromPointCloud(*laserCloudCornerFromMap, *laserCloudCornerFromMap, indices_tmp1);
   downSizeFilterCorner.setInputCloud(laserCloudCornerFromMap);
   downSizeFilterCorner.filter(*laserCloudCornerFromMapDS);
   laserCloudCornerFromMapDSNum = laserCloudCornerFromMapDS->points.size();
   // Downsample the surrounding surf key frames (or map)
+  std::vector<int> indices_tmp2;
+  laserCloudSurfFromMap->is_dense = false;
+  pcl::removeNaNFromPointCloud(*laserCloudSurfFromMap, *laserCloudSurfFromMap, indices_tmp2);
   downSizeFilterSurf.setInputCloud(laserCloudSurfFromMap);
   downSizeFilterSurf.filter(*laserCloudSurfFromMapDS);
   laserCloudSurfFromMapDSNum = laserCloudSurfFromMapDS->points.size();
 
-}
-
-void MapOptimization::groundEdgeDetectionThread() {
-
-  if(cloudKeyPoses3D->points.empty()) 
-    return;
-  
-  if(cloudKeyPoses6D->points.size()<=patchedGroundEdgeProcessedKeyFrames.size()){
-    return;
-  }
-  
-  PointType current_processing_ground_edge_num;
-  current_processing_ground_edge_num = cloudKeyPoses3D->points[ground_edge_processed_.size()];
-
-  pcl::PointCloud<PointType>::Ptr patched_ground;
-  patched_ground.reset(new pcl::PointCloud<PointType>());
-  pcl::KdTreeFLANN<PointType> kdtree_key_pose;
-  kdtree_key_pose.setInputCloud(cloudKeyPoses3D);
-  std::vector<int> pointSearchInd;
-  std::vector<float> pointSearchSqDis;
-  kdtree_key_pose.radiusSearch(current_processing_ground_edge_num, 10.0, pointSearchInd, pointSearchSqDis);
-  for(auto i=pointSearchInd.begin();i!=pointSearchInd.end();i++)
-  {  
-    //RCLCPP_INFO(this->get_logger(), "%.2f, %.2f, %.2f", cloudKeyPoses6D->points[*i].x, cloudKeyPoses6D->points[*i].y, cloudKeyPoses6D->points[*i].z);
-    if(fabs(current_processing_ground_edge_num.y-cloudKeyPoses6D->points[*i].y)<1.0)
-      *patched_ground += *transformPointCloud(patchedGroundKeyFrames[*i], &cloudKeyPoses6D->points[*i]);
-  }
-  
-  //RCLCPP_INFO(this->get_logger(),">>>>>>%lu", patched_ground->points.size());
-
-  //@ generate ground kdtree for edge to search
-  //pcl::transformPointCloud(*patched_ground, *patched_ground, trans_m2ci_af3_);
-  pcl::VoxelGrid<PointType> ds_patched_ground;
-  ds_patched_ground.setLeafSize(0.1, 0.5, 0.1); //we are in camera frame, z pointing to moving direction, y pointing to sky 
-  ds_patched_ground.setInputCloud(patched_ground);
-  ds_patched_ground.filter(*patched_ground);
-  pcl::KdTreeFLANN<PointType> kdtree_ground;
-  kdtree_ground.setInputCloud(patched_ground);
-
-  pcl::PointCloud<PointType>::Ptr patched_ground_edge_camera_frame;
-  pointSearchInd.clear();
-  pointSearchSqDis.clear();
-  kdtree_key_pose.radiusSearch(current_processing_ground_edge_num, 5.0, pointSearchInd, pointSearchSqDis);
-  for(auto i=pointSearchInd.begin();i!=pointSearchInd.end();i++)
-  {
-    if(fabs(current_processing_ground_edge_num.y - cloudKeyPoses3D->points[*i].y)>1.0){
-      continue;
-    }
-    pcl::PointCloud<PointType>::Ptr processed_ground_edge_last;
-    processed_ground_edge_last.reset(new pcl::PointCloud<PointType>());
-    patched_ground_edge_camera_frame.reset(new pcl::PointCloud<PointType>());
-    *patched_ground_edge_camera_frame = *transformPointCloud(patchedGroundEdgeKeyFrames[*i], &cloudKeyPoses6D->points[*i]);
-    for(size_t j=0;j!=patched_ground_edge_camera_frame->points.size();j++){
-      PointType current_pt = patched_ground_edge_camera_frame->points[j];
-      std::vector<int> pointIdxRadiusSearch;
-      std::vector<float> pointRadiusSquaredDistance;
-      if(!pcl::isFinite(current_pt))
-        continue;
-      
-      kdtree_ground.radiusSearch (current_pt, 0.5, pointIdxRadiusSearch, pointRadiusSquaredDistance);
-      if(pointIdxRadiusSearch.size()<ground_edge_threshold_num_){
-        patched_ground_edge_camera_frame->points[j].intensity = 1000;
-        processed_ground_edge_last->push_back(patched_ground_edge_camera_frame->points[j]);
-        
-        for(auto k=0;k!=pointIdxRadiusSearch.size();k++){
-          auto index = pointIdxRadiusSearch[k];
-          double dx = patched_ground->points[index].x - patched_ground_edge_camera_frame->points[j].x;
-          //double dy = patched_ground->points[index].y - patched_ground_edge_camera_frame->points[j].y;
-          double dz = patched_ground->points[index].z - patched_ground_edge_camera_frame->points[j].z;
-          double distance = sqrt(dx*dx+dz*dz);
-          patched_ground->points[index].intensity = 1000.0/(1.0+distance);
-          processed_ground_edge_last->push_back(patched_ground->points[index]);
-        }
-        
-      }
-
-    }
-
-    if((*i)>=patchedGroundEdgeProcessedKeyFrames.size())
-      continue;
-
-    pcl::VoxelGrid<PointType> ds_processed_ground_edge_last;
-    ds_processed_ground_edge_last.setLeafSize(0.1, 0.2, 0.1); //we are in camera frame, z pointing to moving direction, y pointing to sky 
-    ds_processed_ground_edge_last.setInputCloud(processed_ground_edge_last);
-    ds_processed_ground_edge_last.filter(*processed_ground_edge_last);  
-    *processed_ground_edge_last = *transformPointCloudInverse(processed_ground_edge_last, &cloudKeyPoses6D->points[*i]);  
-    patchedGroundEdgeProcessedKeyFrames[*i] = processed_ground_edge_last;
-  
-  }
-
-  //@ process current frame
-  pcl::PointCloud<PointType>::Ptr processed_ground_edge_current;
-  processed_ground_edge_current.reset(new pcl::PointCloud<PointType>());
-  patched_ground_edge_camera_frame.reset(new pcl::PointCloud<PointType>());
-  *patched_ground_edge_camera_frame = *transformPointCloud(patchedGroundEdgeKeyFrames[patchedGroundEdgeKeyFrames.size()-1], &cloudKeyPoses6D->points[patchedGroundEdgeKeyFrames.size()-1]);
-  for(size_t it=0;it!=patched_ground_edge_camera_frame->points.size();it++){
-    PointType current_pt = patched_ground_edge_camera_frame->points[it];
-    std::vector<int> pointIdxRadiusSearch;
-    std::vector<float> pointRadiusSquaredDistance;
-    if(!pcl::isFinite(current_pt))
-      continue;
-    if(kdtree_ground.radiusSearch (current_pt, 0.5, pointIdxRadiusSearch, pointRadiusSquaredDistance)<ground_edge_threshold_num_){
-      patched_ground_edge_camera_frame->points[it].intensity = 1000;
-      processed_ground_edge_current->push_back(patched_ground_edge_camera_frame->points[it]);
-    }
-  }
-  *processed_ground_edge_current = *transformPointCloudInverse(processed_ground_edge_current, &cloudKeyPoses6D->points[patchedGroundEdgeKeyFrames.size()-1]);
-  patchedGroundEdgeProcessedKeyFrames.push_back(processed_ground_edge_current);
-  ground_edge_processed_.push_back(true);
-  
-  pcl::PointCloud<PointType>::Ptr  globalGroundEdgeKeyFrames;
-  globalGroundEdgeKeyFrames.reset(new pcl::PointCloud<PointType>());
-  for (int i = 0; i < ground_edge_processed_.size(); ++i) {
-    *globalGroundEdgeKeyFrames += *transformPointCloud(
-        patchedGroundEdgeProcessedKeyFrames[i], &cloudKeyPoses6D->points[i]);
-  }
-
-  //@ transform to map frame --> z pointing to sky
-  pcl::transformPointCloud(*globalGroundEdgeKeyFrames, *globalGroundEdgeKeyFrames, trans_m2ci_af3_);
-  //RCLCPP_INFO(this->get_logger(),"%lu, %lu", ground_edge_processed_.size(), globalGroundEdgeKeyFrames->points.size());
-  downSizeFilterGlobalGroundKeyFrames_Copy.setInputCloud(globalGroundEdgeKeyFrames);
-  downSizeFilterGlobalGroundKeyFrames_Copy.filter(*globalGroundEdgeKeyFrames);
-  sensor_msgs::msg::PointCloud2 cloud_msg_ground_edge;
-  pcl::toROSMsg(*globalGroundEdgeKeyFrames, cloud_msg_ground_edge);
-  cloud_msg_ground_edge.header.stamp = timeLaserOdometry_header_.stamp;
-  cloud_msg_ground_edge.header.frame_id = "map";
-  pubGroundEdge->publish(cloud_msg_ground_edge);
-  
 }
 
 void MapOptimization::downsampleCurrentScan() {
@@ -1411,6 +1271,8 @@ void MapOptimization::cornerOptimization(int iterCount) {
   for (size_t i = 0; i < laserCloudCornerLastDS->points.size(); i++) {
     pointOri = laserCloudCornerLastDS->points[i];
     pointAssociateToMap(&pointOri, &pointSel);
+    if(!pcl::isFinite(pointSel))
+      continue;
     kdtreeCornerFromMap.nearestKSearch(pointSel, 5, pointSearchInd,
                                         pointSearchSqDis);
 
@@ -1527,6 +1389,8 @@ void MapOptimization::surfOptimization(int iterCount) {
   for (size_t i = 0; i < laserCloudSurfTotalLastDS->points.size(); i++) {
     pointOri = laserCloudSurfTotalLastDS->points[i];
     pointAssociateToMap(&pointOri, &pointSel);
+    if(!pcl::isFinite(pointSel))
+      continue;
     kdtreeSurfFromMap.nearestKSearch(pointSel, 5, pointSearchInd,
                                       pointSearchSqDis);
     if (pointSearchSqDis[4] < 1.0) {
@@ -1746,6 +1610,7 @@ bool MapOptimization::LMOptimization(int iterCount) {
 
 void MapOptimization::scan2MapOptimization() {
   std::lock_guard<std::mutex> lock(mtx);
+  //RCLCPP_ERROR(this->get_logger(), "%lu, %lu", laserCloudCornerFromMapDSNum, laserCloudSurfFromMapDSNum);
   if (laserCloudCornerFromMapDSNum > 10 && laserCloudSurfFromMapDSNum > 100) {
     kdtreeCornerFromMap.setInputCloud(laserCloudCornerFromMapDS);
     kdtreeSurfFromMap.setInputCloud(laserCloudSurfFromMapDS);
@@ -1774,6 +1639,7 @@ void MapOptimization::scan2MapOptimization() {
     cloud_msg_selected_lm.header.stamp = timeLaserOdometry_header_.stamp;
     cloud_msg_selected_lm.header.frame_id = "camera_init";
     pubSelectedCloudForLMOptimization->publish(cloud_msg_selected_lm);
+    
   }
   
 }
@@ -1792,7 +1658,6 @@ void MapOptimization::saveKeyFramesAndFactor() {
   currentRobotPosPoint_.y = transformAftMapped[4];
   currentRobotPosPoint_.z = transformAftMapped[5];
   
-
   bool saveThisKeyFrame = true;
   if (sqrt((previousRobotPos_.x - currentRobotPos_.x) *
                (previousRobotPos_.x - currentRobotPos_.x) +
@@ -1802,6 +1667,11 @@ void MapOptimization::saveKeyFramesAndFactor() {
                (previousRobotPos_.z - currentRobotPos_.z)) < distance_between_key_frame_ &&
                fabs(previousRobotPos_.yaw - currentRobotPos_.yaw) < angle_between_key_frame_) {
     saveThisKeyFrame = false;
+    
+  }
+  
+  if(current_ground_size_<100 && cloudKeyPoses3D->points.size()<10){
+    saveThisKeyFrame = true;
   }
 
   if (saveThisKeyFrame == false && !cloudKeyPoses3D->points.empty()) return;
@@ -1901,7 +1771,7 @@ void MapOptimization::saveKeyFramesAndFactor() {
   thisPose6D.yaw = latestEstimate.rotation().roll();  // in camera frame
   thisPose6D.time = timeLaserOdometry;
   cloudKeyPoses6D->push_back(thisPose6D);
-
+  
   //
   // save updated transform
   //
@@ -2036,26 +1906,32 @@ void MapOptimization::run() {
   laserCloudOutlierLast = association.cloud_outlier_last;
 
   //pcl::copyPointCloud(association.cloud_corner_last, *laserCloudCornerLast);
-  nav_msgs::msg::Odometry laser_odometry = std::move(association.laser_odometry);
+  nav_msgs::msg::Odometry decisive_odometry = std::move(association.decisive_odometry);
 
-  timeLaserOdometry = laser_odometry.header.stamp.sec + laser_odometry.header.stamp.nanosec/1000000000.;
-  timeLaserOdometry_header_.stamp = laser_odometry.header.stamp;
+  timeLaserOdometry = decisive_odometry.header.stamp.sec + decisive_odometry.header.stamp.nanosec/1000000000.;
+  timeLaserOdometry_header_.stamp = decisive_odometry.header.stamp;
 
   trans_c2s_af3_ = tf2::transformToEigen(association.trans_c2s);
   trans_s2c_af3_ = trans_c2s_af3_.inverse();
-  trans_c2b_af3_ = tf2::transformToEigen(association.trans_c2b);
+  trans_b2s_ = association.trans_b2s;
+  trans_b2s_af3_ = tf2::transformToEigen(association.trans_b2s);
+  trans_c2s_ = association.trans_c2s;
   tf2_trans_c2s_.setRotation(tf2::Quaternion(association.trans_c2s.transform.rotation.x, association.trans_c2s.transform.rotation.y, association.trans_c2s.transform.rotation.z, association.trans_c2s.transform.rotation.w));
   tf2_trans_c2s_.setOrigin(tf2::Vector3(association.trans_c2s.transform.translation.x, association.trans_c2s.transform.translation.y, association.trans_c2s.transform.translation.z));
-  tf2_trans_c2b_.setRotation(tf2::Quaternion(association.trans_c2b.transform.rotation.x, association.trans_c2b.transform.rotation.y, association.trans_c2b.transform.rotation.z, association.trans_c2b.transform.rotation.w));
-  tf2_trans_c2b_.setOrigin(tf2::Vector3(association.trans_c2b.transform.translation.x, association.trans_c2b.transform.translation.y, association.trans_c2b.transform.translation.z));
-  tf2_trans_b2s_.mult(tf2_trans_c2b_.inverse(), tf2_trans_c2s_);
-  wheelOdometry = association.wheel_odometry;
-  broadcast_odom_tf_ = association.broadcast_odom_tf;
+  tf2_trans_b2s_.setRotation(tf2::Quaternion(association.trans_b2s.transform.rotation.x, association.trans_b2s.transform.rotation.y, association.trans_b2s.transform.rotation.z, association.trans_b2s.transform.rotation.w));
+  tf2_trans_b2s_.setOrigin(tf2::Vector3(association.trans_b2s.transform.translation.x, association.trans_b2s.transform.translation.y, association.trans_b2s.transform.translation.z));
+  trans_m2ci_ = association.trans_m2ci;
+  trans_m2ci_af3_ = tf2::transformToEigen(association.trans_m2ci); //for pcl conversion
+  tf2_trans_m2ci_.setRotation(tf2::Quaternion(association.trans_m2ci.transform.rotation.x, association.trans_m2ci.transform.rotation.y, association.trans_m2ci.transform.rotation.z, association.trans_m2ci.transform.rotation.w));
+  tf2_trans_m2ci_.setOrigin(tf2::Vector3(association.trans_m2ci.transform.translation.x, association.trans_m2ci.transform.translation.y, association.trans_m2ci.transform.translation.z));
+  has_m2ci_af3_ = true;
+  externalOdometry = association.external_odometry;
+  
   
   pcl::transformPointCloud(*association.cloud_patched_ground_last, *laserCloudPatchedGroundLast, trans_c2s_af3_);
   pcl::transformPointCloud(*association.cloud_patched_ground_edge_last, *laserCloudPatchedGroundEdgeLast, trans_c2s_af3_);
 
-  OdometryToTransform(laser_odometry, transformSum);
+  OdometryToTransform(decisive_odometry, transformSum);
 
   transformAssociateToMap();
   
@@ -2087,29 +1963,28 @@ void MapOptimization::runWoLO(){
   laserCloudOutlierLast = association.cloud_outlier_last;
 
   //pcl::copyPointCloud(association.cloud_corner_last, *laserCloudCornerLast);
-  nav_msgs::msg::Odometry laser_odometry = std::move(association.laser_odometry);
+  nav_msgs::msg::Odometry decisive_odometry = std::move(association.decisive_odometry);
 
-  timeLaserOdometry = laser_odometry.header.stamp.sec + laser_odometry.header.stamp.nanosec/1000000000.;
-  timeLaserOdometry_header_.stamp = laser_odometry.header.stamp;
+  timeLaserOdometry = decisive_odometry.header.stamp.sec + decisive_odometry.header.stamp.nanosec/1000000000.;
+  timeLaserOdometry_header_.stamp = decisive_odometry.header.stamp;
 
   trans_c2s_af3_ = tf2::transformToEigen(association.trans_c2s);
   trans_s2c_af3_ = trans_c2s_af3_.inverse();
-  trans_c2b_af3_ = tf2::transformToEigen(association.trans_c2b);
+  trans_b2s_af3_ = tf2::transformToEigen(association.trans_b2s);
   tf2_trans_c2s_.setRotation(tf2::Quaternion(association.trans_c2s.transform.rotation.x, association.trans_c2s.transform.rotation.y, association.trans_c2s.transform.rotation.z, association.trans_c2s.transform.rotation.w));
   tf2_trans_c2s_.setOrigin(tf2::Vector3(association.trans_c2s.transform.translation.x, association.trans_c2s.transform.translation.y, association.trans_c2s.transform.translation.z));
-  tf2_trans_c2b_.setRotation(tf2::Quaternion(association.trans_c2b.transform.rotation.x, association.trans_c2b.transform.rotation.y, association.trans_c2b.transform.rotation.z, association.trans_c2b.transform.rotation.w));
-  tf2_trans_c2b_.setOrigin(tf2::Vector3(association.trans_c2b.transform.translation.x, association.trans_c2b.transform.translation.y, association.trans_c2b.transform.translation.z));
-  tf2_trans_b2s_.mult(tf2_trans_c2b_.inverse(), tf2_trans_c2s_);
-  wheelOdometry = association.wheel_odometry;
-  broadcast_odom_tf_ = association.broadcast_odom_tf;
+  tf2_trans_b2s_.setRotation(tf2::Quaternion(association.trans_b2s.transform.rotation.x, association.trans_b2s.transform.rotation.y, association.trans_b2s.transform.rotation.z, association.trans_b2s.transform.rotation.w));
+  tf2_trans_b2s_.setOrigin(tf2::Vector3(association.trans_b2s.transform.translation.x, association.trans_b2s.transform.translation.y, association.trans_b2s.transform.translation.z));
+  has_m2ci_af3_ = true;
+  externalOdometry = association.external_odometry;
 
   pcl::transformPointCloud(*association.cloud_patched_ground_last, *laserCloudPatchedGroundLast, trans_c2s_af3_);
   pcl::transformPointCloud(*association.cloud_patched_ground_edge_last, *laserCloudPatchedGroundEdgeLast, trans_c2s_af3_);
 
-  OdometryToTransform(laser_odometry, transformSum);
+  OdometryToTransform(decisive_odometry, transformSum);
 
   transformAssociateToMap();
-  
+
   publishTF();
 
   clearCloud();

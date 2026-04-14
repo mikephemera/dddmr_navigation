@@ -58,6 +58,10 @@ def generate_launch_description():
     trt_node = Node(
         package='dddmr_semantic_segmentation',
         executable='ddrnet_ros_img_sub.py',
+        parameters=[{
+            'publish_colored_mask_result': True, #set to False to save cpu up tp 20% and reach more than 15 fps
+            'use_class_based_mask_result': False #False use rgb based
+        }],
         remappings=[
             ('/camera/camera/color/image_raw', '/realsense/mid/color/image_raw')
         ]
@@ -70,7 +74,8 @@ def generate_launch_description():
         parameters=[{
             'max_distance': 10.0,
             'sample_step': 2,
-            'voxel_size': 0.05
+            'voxel_size': 0.05,
+            'exclude_class': [-1]
         }],
         remappings=[
             ('/camera_info', '/realsense/mid/depth/camera_info'),

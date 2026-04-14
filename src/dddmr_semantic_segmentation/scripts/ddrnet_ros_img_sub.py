@@ -30,9 +30,13 @@ class DDRNetROS(Node):
             self.device = torch.device("cuda")
         else:
             self.device = torch.device("cpu")
+        
+        #set to False to save cpu up tp 20% and reach more than 15 fps
+        self.declare_parameter('publish_colored_mask_result', True)
+        self.publish_colored_mask_result = self.get_parameter('publish_colored_mask_result').get_parameter_value().bool_value
 
-        self.publish_colored_mask_result = True #set to False to save cpu up tp 20% and reach more than 15 fps
-        self.publish_class_based_mask_result = False
+        self.declare_parameter('use_class_based_mask_result', False)
+        self.use_class_based_mask_result = self.get_parameter('use_class_based_mask_result').get_parameter_value().bool_value
 
         self.trt_inference = trt_inference
         self.input_transform = transforms.Compose([
@@ -93,7 +97,7 @@ class DDRNetROS(Node):
             inferenced_result.header = m_stamp
             self.inferenced_result_pub.publish(inferenced_result)
         
-        if(self.publish_class_based_mask_result):
+        if(self.use_class_based_mask_result):
             gray_ros_image = self.br.cv2_to_imgmsg(pred_2d, encoding="mono8")
             gray_ros_image.header = m_stamp
             self.inferenced_mask_pub.publish(gray_ros_image)

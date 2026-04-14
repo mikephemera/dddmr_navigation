@@ -135,9 +135,10 @@ install(DIRECTORY include/
 )
 
 install(DIRECTORY
-  "launch"
-  "config"
-  "rviz"
+  launch
+  config
+  rviz
+  map
   DESTINATION share/${PROJECT_NAME}/
 )
 

@@ -438,7 +438,9 @@ bool GlobalPlanner::getStartGoalID(const geometry_msgs::msg::PoseStamped& start,
       goal.pose.position.x, goal.pose.position.y, goal.pose.position.z, pointIdxRadiusSearch_goal[0], 
       pcl_ground_->points[pointIdxRadiusSearch_goal[0]].x, pcl_ground_->points[pointIdxRadiusSearch_goal[0]].y, pcl_ground_->points[pointIdxRadiusSearch_goal[0]].z);
   }
-
+  
+  goal_id = pointIdxRadiusSearch_goal[0];
+  
   //--------------------------------------------------------------------------------------
   //@Get start ID
   std::vector<int> pointIdxRadiusSearch_start;
@@ -465,8 +467,6 @@ bool GlobalPlanner::getStartGoalID(const geometry_msgs::msg::PoseStamped& start,
 
   }
   start_id = pointIdxRadiusSearch_start[0];
-
-  goal_id = pointIdxRadiusSearch_goal[0];
 
   return true;
 

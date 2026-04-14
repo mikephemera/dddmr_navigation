@@ -25,7 +25,8 @@
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/message_filter.h"
 #include "tf2_ros/transform_broadcaster.h"
- 
+#include <tf2_eigen/tf2_eigen.hpp>
+
 #include <vector>
 #include <cmath>
 #include <algorithm>
@@ -70,8 +71,8 @@ struct ProjectionOut
   pcl::PointCloud<PointType>::Ptr patched_ground_edge;
   std::string odom_type;
   geometry_msgs::msg::TransformStamped trans_c2s;
-  geometry_msgs::msg::TransformStamped trans_c2b;
   geometry_msgs::msg::TransformStamped trans_b2s;
+  geometry_msgs::msg::TransformStamped trans_m2ci;
   cloud_msgs::msg::CloudInfo seg_msg;
   int vertical_scans;
   int horizontal_scans;
@@ -87,9 +88,10 @@ struct AssociationOut
   pcl::PointCloud<PointType>::Ptr cloud_patched_ground_last;
   pcl::PointCloud<PointType>::Ptr cloud_patched_ground_edge_last;
   geometry_msgs::msg::TransformStamped trans_c2s;
-  geometry_msgs::msg::TransformStamped trans_c2b;
-  nav_msgs::msg::Odometry laser_odometry; //in the lego_loam definition frame
-  nav_msgs::msg::Odometry wheel_odometry; //wheel odom, odom->baselink frame
+  geometry_msgs::msg::TransformStamped trans_b2s;
+  geometry_msgs::msg::TransformStamped trans_m2ci;
+  nav_msgs::msg::Odometry decisive_odometry; //in the lego_loam definition frame
+  nav_msgs::msg::Odometry external_odometry; //external odom, odom->baselink frame
   bool broadcast_odom_tf;
 };
 

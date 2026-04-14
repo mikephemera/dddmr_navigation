@@ -1,6 +1,16 @@
 # DDDMR BEGINNER GUIDE
 
-This README is a beginner’s guide to the DDDMR Navigation Stack. With both a Gazebo quadruped robot example and a real robot guide, it’s designed to help you get up and running fast, explore, and have fun along the way.
+[العربية](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.ar.md) | [繁體中文](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.zh-hant.md) | [简体中文](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.zh-hans.md) | [Русский](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.ru.md) | [Deutsch](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.de.md) | [Español](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.es.md) | [한국어](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.ko.md) | [Português](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.pt.md) | [Türkçe](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.tr.md) | [Tiếng Việt](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.vi.md) | [Français](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.fr.md) | [日本語](https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_beginner_guide/translations/README.ja.md)
+
+This README is a beginner's guide to the DDDMR Navigation Stack. With both a gazebo quadruped robot example and a real robot guide, it's designed to help you get up and running fast, explore, and have fun along the way.
+
+## Table of Contents
+
+| # | Section | Description |
+|:-:|:--------|:------------|
+| 1 | [DDDMR Navigation with Gazebo](#-dddmr-navigation-with-gazebo) | Simulation demo with quadruped robot |
+| 2 | [DDDMR Navigation with a Real Robot](#-start-dddmr-navigation-with-a-real-robot) | Deploy on your real robot (wheeled robot, quadruped, humanoid, and more) |
+
 ## 🖥️ Software Requirements
 - **Ubuntu 22.04** (tested in 22.04, should support 24.04)
 - **Docker**  [install Docker](https://docs.docker.com/engine/install/)
@@ -69,57 +79,196 @@ source install/setup.bash && ros2 launch p2p_move_base go2_localization.launch
 
 
 
-<details><summary><h2>💡 DDDMR Navigation with a Real Robot (Coming soon..)</h2></summary>
+---
+
+<p align="center">
+  <b>━━━━━━━━━━ 🤖 Real Robot Tutorial Below 🤖 ━━━━━━━━━━</b>
+</p>
+
+---
+
+
 ## ✨ Start DDDMR Navigation with a Real Robot
-You should be able to run DDDMR Navigation like a charm if your system meet following requirements:
 
-👉 Requirements: 
-  1. Your robot can be controlled by a topic (/cmd_vel) based on geometry_msgs/msg/Twist type.
-  2. You have a multi layer lidar and there is a ROS2 node publishing the point cloud based on sensor_msgs/msg/PointCloud2 type.
-  3. You have a ROS2 node that publishes an odometry topic and tf based on nav_msgs/msg/Odometry type.
-     
-     * DDDMR Navigation should work if your quadruped robot, humanoid robot or wheel robot publish reasonable odometry topic/tf, i.e. error is less than 10%.
-  5. When your system is launched, you should see following tf tree. In addition, make sure your the frame_id of your lidar topic is consistent with your tf tree:
-      <p align='center'>
-        <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/tf_requirement.png" width="200" height="480"/>
-      </p>
-  6. If you do ros2 topic list, you should be able to see: /odom, /cmd_vel, /tf and /lidar_point_cloud
-  7. You are good to go.
+This guide will walk you through setting up **3D navigation** on your real robot — from mapping to autonomous navigation.
 
-👉 Advanced:
-  1. Implement [3D odometry](https://github.com/dfl-rlab/dddmr_navigation/tree/main/src/dddmr_odom_3d) to get a better and robust localization and mapping results.
+DDDMR brings 3D navigation to your wheeled robot, quadruped, humanoid, and more. Let's get your robot moving!
 
-## 🚧 Start Mapping
-There are 2️⃣ mapping approaches supported in dddmr_navigation.
+### 1. Create docker image
 
-### Mapping from a Bag File - Offline Mapping
-To map the area, you can record two ROS2 topics for the offline mapping. Recording odom topic and point cloud topic while manually drive your robot in the area.
-Odom topic for the offline mapping is not mandatory, but in some cases such as featureless environment or wide open area, it can be used to improve the mapping quality.
+Clone the repo and run ./build.bash, please select **`x64`** or **`l4t`** depending on your platform.
 
 ```
-ros2 bag record /odom /lidar_point_cloud
+cd ~
+git clone https://github.com/dfl-rlab/dddmr_navigation.git
+cd ~/dddmr_navigation/dddmr_docker/docker_file && ./build.bash
 ```
 
-Once you have the bag file, modify your directory, pointcoud topic and odom topic in the off-line launch file:
-https://github.com/dfl-rlab/dddmr_navigation/blob/7706c3333aa9dbc90a4c18598cef05d39388052f/src/dddmr_lego_loam/lego_loam_bor/config/loam_bag_c16_config.yaml#L4
-In addition, make sure the lidar spec is correctly setup:
-https://github.com/dfl-rlab/dddmr_navigation/blob/7706c3333aa9dbc90a4c18598cef05d39388052f/src/dddmr_lego_loam/lego_loam_bor/config/loam_bag_c16_config.yaml#L13
+> **Note:** Our test platform uses Jetson Orin Nano, so we select **`l4t`**.
 
-And then you can run the offline mapping by:
+### 2. Test Platform
 
-```
-ros2 launch lego_loam_bor lego_loam_bag.launch
-```
-### Mapping in Realtime - Online Mapping
-Similar to the offline mapping, setup the lidar spec correctly in the configutation file:
-https://github.com/dfl-rlab/dddmr_navigation/blob/7706c3333aa9dbc90a4c18598cef05d39388052f/src/dddmr_lego_loam/lego_loam_bor/config/loam_c16_config.yaml#L4
-Change the corresponding topics at:
-https://github.com/dfl-rlab/dddmr_navigation/blob/7706c3333aa9dbc90a4c18598cef05d39388052f/src/dddmr_lego_loam/lego_loam_bor/launch/lego_loam.launch#L6
+To quickly match this tutorial, here is the hardware setup we use:
 
-And then you can run the online mapping by:
-```
-ros2 launch lego_loam_bor lego_loam.launch
-```
-## 🚧 Start Localization
+<p align='center'>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/hardware_quadruped.png" width="500" height="250"/>
+</p>
 
-## 🚧 Start Point to Point Navigation
+| Component | Model |
+|:----------|:------|
+| Robot | Quadruped (Lite3) |
+| LiDAR | Dome LiDAR (RoboSense Airy), tilted 45° |
+| Computer | Jetson Orin Nano |
+| Power | External battery for LiDAR & Jetson |
+| Connection | Ethernet (robot, Jetson, and LiDAR communicate over network) |
+
+> **Note:** You don't need the exact same hardware. As long as your system meets the requirements below, DDDMR will work.
+
+#### Requirements
+
+| Item | Topic | Message Type | Description |
+|:----:|:------|:-------------|:------------|
+| 🎮 | `/cmd_vel` | `geometry_msgs/msg/Twist` | Velocity command to control your robot |
+| 📡 | `/lidar_point_cloud` | `sensor_msgs/msg/PointCloud2` | 3D LiDAR point cloud (multi-layer, dome, solid, etc.) |
+| 📍 | `/odom` | `nav_msgs/msg/Odometry` | Odometry with TF (error < 10% will be better) |
+| 🌳 | `/tf` | `tf2_msgs/msg/TFMessage` | TF tree: `odom` → `base_link` → `lidar_link` |
+
+> **Note:** 
+> - DDDMR can be used on **wheeled robots, quadrupeds, and humanoids** as long as they meet the requirements above.
+> - `/cmd_vel` is the **input** to your robot for motion control.
+> - `/lidar_point_cloud`, `/odom`, `/tf` are **outputs** from your robot, used by DDDMR for mapping and localization.
+
+#### TF Tree Structure
+
+Make sure your `frame_id` in LiDAR topic matches your TF tree:
+
+<p align='center'>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/tf_requirement.png" width="150" height="250"/>
+</p>
+
+#### TF Configuration Example
+
+Here is the TF configuration using our quadruped robot as an example. The LiDAR is mounted at `x=0.2m`, `z=0.22m` from `base_link`, and pitched down by 45°:
+
+<p align='center'>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/setup_lidar_testing_quadruped.png" width="400" height="250"/>
+</p>
+
+```xml
+<!--- TF: x y z yaw pitch roll -->
+<node pkg="tf2_ros" exec="static_transform_publisher" name="sensor2baselink" 
+      args="0.2 0.0 0.22 0.0 0.785 0.0 base_link lidar" />
+```
+
+> **Note:** 45° ≈ 0.785 rad. Pitch down.
+
+#### 👉 Advanced (Optional)
+
+| Feature | Description |
+|:--------|:------------|
+| [3D Odometry](https://github.com/dfl-rlab/dddmr_navigation/tree/main/src/dddmr_odom_3d) | Better localization & mapping on uneven terrain |
+
+---
+
+### 3. 🚀 RUN Mapping + Navigation for robot
+
+DDDMR supports three navigation workflows:
+
+<p align='center'>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/dddmr_nav_workflows.png" width="600" height="450"/>
+</p>
+
+> **Note:** This tutorial follows **② Online mapping + Nav** workflow.
+
+---
+
+
+### 3.1 🗺️ Mapping
+
+Before starting, make sure your robot is publishing the required topics:
+
+- Odometry topic
+- LiDAR point cloud topic  
+- TF (`odom` → `base_link` → `lidar_link`)
+
+Then launch the mapping:
+
+```bash
+ros2 launch dddmr_beginner_guide airy_tilt45_mapping.launch
+```
+
+After launching, you should see the RViz interface like this:
+
+<p align='center'>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/mapping_realrobot_rviz.png" width="800" height="500"/>
+</p>
+
+When you drive your robot around, you will notice:
+- **Key frames** — should increase as the robot moves
+- **Feature points** — extracted features from the environment
+- **Ground points** — detected ground surface
+- **2D projection** — helps you understand the scene and LiDAR FOV
+
+#### Save the Map
+
+After you finish mapping the area, open a new terminal and run:
+
+```bash
+ros2 service call /save_mapped_point_cloud std_srvs/srv/Empty
+```
+
+<p align='center'>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/map_save_.png" width="500" height="250"/>
+</p>
+
+When you see `Create dir:` in the terminal, it means the map has been saved. If you are done mapping, you can close the mapping node.
+
+The map will be saved in `/tmp`. You can move the folder to `/root/dddmr_bags`:
+
+```bash
+mv /tmp/2026_03_28_19_25_15/ /root/dddmr_bags/
+```
+
+> **Note:** The folder name `2026_03_28_19_25_15` is just an example. Your folder name will be different based on when you run the mapping.
+
+---
+
+### 3.2 📍 Localization + Navigation
+
+First, open the configuration file and set your map path:
+
+📄 `config/airy_tilt45_navigation.yaml`
+
+<p align='center'>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/robot_map_location.png" width="500" height="500"/>
+</p>
+
+Change `pose_graph_dir` to your map folder:
+
+```yaml
+pose_graph_dir: "/root/dddmr_bags/2026_03_28_19_25_15"
+```
+
+> **Note:** Replace `2026_03_28_19_25_15` with your actual map folder name.
+
+Then launch the localization and navigation:
+
+```bash
+ros2 launch dddmr_beginner_guide airy_tilt45_navigation.launch
+```
+
+<p align='center'>
+  <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_beginner_guide/LOC_NAV_realrobot_rviz.png" width="800" height="500"/>
+</p>
+
+##### Step 1: Give Initial Pose
+
+Click **「3D Pose Estimate」** in RViz toolbar and select a ground point that matches your robot's real-world position.
+
+If the initial pose is correct, you will see the observed point cloud overlap well with the map features.
+
+##### Step 2: Send Goal
+
+Once initialization is done, click **「3D Goal Pose」** and select a ground point as the goal.
+
+The robot should start moving toward the goal.

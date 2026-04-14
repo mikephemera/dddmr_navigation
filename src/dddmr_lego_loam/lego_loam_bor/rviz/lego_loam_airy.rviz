@@ -27,7 +27,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: Map
+    SyncSource: RecentCorner
   - Class: mapping_panel/MappingPanel
     Name: MappingPanel
   - Class: pose_graph_editor_panel/PoseGraphEditorPanel
@@ -54,12 +54,12 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 255
       Min Color: 0; 0; 0
-      Min Intensity: 2
+      Min Intensity: 1
       Name: Raw
       Position Transformer: XYZ
       Selectable: true
@@ -72,10 +72,10 @@ Visualization Manager:
         Filter size: 1
         History Policy: Keep Last
         Reliability Policy: Best Effort
-        Value: /rslidar_points
+        Value: /airy_points
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: false
       Autocompute Value Bounds:
@@ -521,7 +521,7 @@ Visualization Manager:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /projected_image
       Value: true
   Enabled: true
@@ -571,25 +571,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 30.93073272705078
+      Distance: 18.49884033203125
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -10.731968879699707
-        Y: -0.29882878065109253
-        Z: 13.236065864562988
+        X: 7.7027587890625
+        Y: 1.9543888568878174
+        Z: 1.6668380498886108
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.9797959327697754
+      Pitch: -0.14520323276519775
       Target Frame: map
       Value: Orbit (rviz_default_plugins)
-      Yaw: 2.873565196990967
+      Yaw: 5.228579998016357
     Saved: ~
 Window Geometry:
   Displays:

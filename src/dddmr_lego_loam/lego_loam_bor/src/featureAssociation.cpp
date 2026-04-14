@@ -117,7 +117,7 @@ FeatureAssociation::~FeatureAssociation()
   _input_channel.send({});
 }
 
-void FeatureAssociation::initializationValue() {
+void FeatureAssociation::initializeValue() {
   const size_t cloud_size = _vertical_scans * _horizontal_scans;
   cloudSmoothness.resize(cloud_size);
 
@@ -177,9 +177,6 @@ void FeatureAssociation::initializationValue() {
   mappingOdometry.header.frame_id = "camera_init";
   mappingOdometry.child_frame_id = "laser_odom";
 
-  laserOdometryTrans.header.frame_id = "camera_init";
-  laserOdometryTrans.child_frame_id = "laser_odom";
-
   isDegenerate = false;
 
   frameCount = skipFrameNum;
@@ -201,23 +198,27 @@ void FeatureAssociation::tfInitial(){
 void FeatureAssociation::odomHandler(const nav_msgs::msg::Odometry::SharedPtr odomIn){
   
   odom_topic_alive_ = true;
+  exteralOdometry = (*odomIn);
 
-  if(!odom_tf_alive_ && odom_tf_detect_number_<2){
+  if(!odom_tf_alive_ && odom_tf_detect_number_<3){
+
+    odom_tf_detect_number_++;
     try
     {
       geometry_msgs::msg::TransformStamped trans_o2b;
       trans_o2b = tf2Buffer_->lookupTransform(
           odomIn->header.frame_id, odomIn->child_frame_id, tf2::TimePointZero);
       odom_tf_alive_ = true;
+      RCLCPP_INFO(this->get_logger(), "Detect %s to %s TF, MO will not broadcast from %s to %s.", odomIn->header.frame_id.c_str(), baselink_frame_.c_str(), odomIn->header.frame_id.c_str(), baselink_frame_.c_str());
     }
     catch (tf2::TransformException& e)
     {
-      RCLCPP_ERROR(this->get_logger(), "Could not get %s to %s, check your odom topic and baselink_frame", odomIn->child_frame_id.c_str(), baselink_frame_.c_str());
+      RCLCPP_DEBUG(this->get_logger(), "Could not get %s to %s, check your odom topic and baselink_frame", odomIn->child_frame_id.c_str(), baselink_frame_.c_str());
     }
-    odom_tf_detect_number_++;
+    
   }
 
-  wheelOdometry = (*odomIn);
+  
   if(odom_type_!="wheel_odometry"){
     return;
   }
@@ -226,9 +227,10 @@ void FeatureAssociation::odomHandler(const nav_msgs::msg::Odometry::SharedPtr od
   //@ If odom is not initilized with 0, we record it and then transform it
   //@ Because odom in lego loam should always start with 0
   if(!first_odom_prepared_){
-    tf2_first_odom_.setOrigin(tf2::Vector3(odomIn->pose.pose.position.x, odomIn->pose.pose.position.y, odomIn->pose.pose.position.z));
-    tf2_first_odom_.setRotation(tf2::Quaternion(odomIn->pose.pose.orientation.x, odomIn->pose.pose.orientation.y, odomIn->pose.pose.orientation.z, odomIn->pose.pose.orientation.w));
-    tf2_first_odom_inverse_ = tf2_first_odom_.inverse();
+    tf2_first_odom2b_.setOrigin(tf2::Vector3(odomIn->pose.pose.position.x, odomIn->pose.pose.position.y, odomIn->pose.pose.position.z));
+    tf2_first_odom2b_.setRotation(tf2::Quaternion(odomIn->pose.pose.orientation.x, odomIn->pose.pose.orientation.y, odomIn->pose.pose.orientation.z, odomIn->pose.pose.orientation.w));
+    tf2_first_odom2s_.mult(tf2_first_odom2b_, tf2_trans_b2s_);
+    tf2_first_odom2s_inverse_ = tf2_first_odom2s_.inverse();
     first_odom_prepared_ = true;
     RCLCPP_WARN(this->get_logger(), "The first odom is record: %.2f, %.2f, %.2f", odomIn->pose.pose.position.x, odomIn->pose.pose.position.y, odomIn->pose.pose.position.z);
   }
@@ -245,35 +247,33 @@ void FeatureAssociation::odomHandler(const nav_msgs::msg::Odometry::SharedPtr od
     }
     catch (tf2::TransformException& e)
     {
-      RCLCPP_ERROR(this->get_logger(), "Could not get %s to %s, check your odom topic and baselink_frame", odomIn->child_frame_id.c_str(), baselink_frame_.c_str());
+      RCLCPP_ERROR(this->get_logger(), "Could not get %s to %s, check your odom topic and baselink frame", odomIn->child_frame_id.c_str(), baselink_frame_.c_str());
     }
   }
 
-  tf2::Transform tf2_trans_o2b;
+  tf2::Transform tf2_trans_o2b, tf2_trans_o2s, tf2_trans_first_s2s;
   tf2_trans_o2b.setOrigin(tf2::Vector3(odomIn->pose.pose.position.x, odomIn->pose.pose.position.y, odomIn->pose.pose.position.z));
   tf2_trans_o2b.setRotation(tf2::Quaternion(odomIn->pose.pose.orientation.x, odomIn->pose.pose.orientation.y, odomIn->pose.pose.orientation.z, odomIn->pose.pose.orientation.w));
+  tf2_trans_o2s.mult(tf2_trans_o2b, tf2_trans_b2s_);
 
-  tf2::Transform tf2_trans_first2b, tf2_trans_o2s;
-  //@ make the first odom msg as origin
-  tf2_trans_first2b.mult(tf2_first_odom_inverse_, tf2_trans_o2b);
-  //@ tf2_trans_first2b is the odom from the first point to rest
-  tf2_trans_o2s.mult(tf2_trans_first2b, tf2_trans_b2s_);
+  tf2_trans_first_s2s.mult(tf2_first_odom2s_inverse_, tf2_trans_o2s);
 
   //@Get RPY
-  tf2::Matrix3x3 m(tf2_trans_o2s.getRotation());
+  tf2::Matrix3x3 m(tf2_trans_first_s2s.getRotation());
   double roll, pitch, yaw;
   m.getRPY(roll, pitch, yaw);
   double odom_time = static_cast<double>(odomIn->header.stamp.sec) + static_cast<double>(odomIn->header.stamp.nanosec) * 1e-9;
   double cloud_time = static_cast<double>(segInfo.header.stamp.sec) + static_cast<double>(segInfo.header.stamp.nanosec) * 1e-9;
-  if(fabs(odom_time-cloud_time)<0.05 || fabs(odom_time)<=0.1 || fabs(cloud_time)<=0.1){ //@ try to handle 0 timestamp
-    transformWheelOdometrySum[0] = pitch;
-    transformWheelOdometrySum[1] = yaw;
-    transformWheelOdometrySum[2] = roll;
-    transformWheelOdometrySum[3] = odomIn->pose.pose.position.y;
-    transformWheelOdometrySum[4] = odomIn->pose.pose.position.z;
-    transformWheelOdometrySum[5] = odomIn->pose.pose.position.x;
-  }
-
+  //if(fabs(odom_time-cloud_time)<0.05 || fabs(odom_time)<=0.1 || fabs(cloud_time)<=0.1){ //@ try to handle 0 timestamp
+  
+    transformExternalOdometrySum[0] = pitch;
+    transformExternalOdometrySum[1] = yaw;
+    transformExternalOdometrySum[2] = roll;
+    transformExternalOdometrySum[3] = tf2_trans_first_s2s.getOrigin().y();
+    transformExternalOdometrySum[4] = tf2_trans_first_s2s.getOrigin().z();
+    transformExternalOdometrySum[5] = tf2_trans_first_s2s.getOrigin().x();
+    
+  //}
   
   //RCLCPP_WARN(this->get_logger(), "%.2f, %.2f, %.2f <> %.2f, %.2f, %.2f", roll, pitch, yaw, odomIn->pose.pose.position.x, odomIn->pose.pose.position.y, odomIn->pose.pose.position.z);
 }
@@ -281,15 +281,16 @@ void FeatureAssociation::odomHandler(const nav_msgs::msg::Odometry::SharedPtr od
 void FeatureAssociation::adjustDistortion() {
   bool halfPassed = false;
   int cloudSize = segmentedCloud->points.size();
-
+  
   PointType point;
 
   for (int i = 0; i < cloudSize; i++) {
     point.x = segmentedCloud->points[i].y;
     point.y = segmentedCloud->points[i].z;
     point.z = segmentedCloud->points[i].x;
-
-    float ori = -atan2(point.x, point.z);
+    
+    float ori = -atan2(segmentedCloud->points[i].y, segmentedCloud->points[i].x);
+    //float ori = -atan2(segmentedCloud_pitch_corrected->points[i].y, segmentedCloud_pitch_corrected->points[i].x);
     if (!halfPassed) {
       if (ori < segInfo.start_orientation - M_PI / 2)
         ori += 2 * M_PI;
@@ -305,11 +306,40 @@ void FeatureAssociation::adjustDistortion() {
       else if (ori > segInfo.end_orientation + M_PI / 2)
         ori -= 2 * M_PI;
     }
+    
+    /*
+    double ori2;
+    if(segmentedCloud->points[i].x<0 && segmentedCloud->points[i].y>=0){
+      ori2 = -atan2(segmentedCloud->points[i].y, segmentedCloud->points[i].x) + 2 * M_PI;
+    }
+    else if(segmentedCloud->points[i].x<0 && segmentedCloud->points[i].y<0){
+      ori2 = -atan2(segmentedCloud->points[i].y, segmentedCloud->points[i].x);
+    }
+    else if(segmentedCloud->points[i].x>=0 && segmentedCloud->points[i].y>=0){
+      ori2 = -atan2(segmentedCloud->points[i].y, segmentedCloud->points[i].x) + 2 * M_PI;
+    }
+    else if(segmentedCloud->points[i].x>=0 && segmentedCloud->points[i].y<0){
+      ori2 = -atan2(segmentedCloud->points[i].y, segmentedCloud->points[i].x);
+      if(ori2>=1.5707963267948966)
+        ori2 = M_PI / 2.;
+      else if(ori2<1.5707963267948966 && ori2>1)
+        ori2 = -atan2(segmentedCloud->points[i].y, segmentedCloud->points[i].x);
+      else
+        ori2 += 2 * M_PI;
+    }
+
+    if(fabs(ori-ori2)>0.01){
+      RCLCPP_INFO(this->get_logger(), "%.2f, %.2f, %.2f, %.2f", segmentedCloud->points[i].x, segmentedCloud->points[i].y, ori, ori2);
+    }
+    */
 
     float relTime = (ori - segInfo.start_orientation) / segInfo.orientation_diff;
-    point.intensity =
-        int(segmentedCloud->points[i].intensity) + _scan_period * relTime;
-
+    if(_scan_period<=0.0){
+      //keep original time
+    }
+    else{
+      point.intensity = int(segmentedCloud->points[i].intensity) + _scan_period * relTime;
+    }
     segmentedCloud->points[i] = point;
   }
 
@@ -405,7 +435,7 @@ void FeatureAssociation::extractFeatures() {
       for (int k = ep; k >= sp; k--) {
         int ind = cloudSmoothness[k].ind;
         if (cloudNeighborPicked[ind] == 0 &&
-            cloudCurvature[ind] > _edge_threshold &&
+            cloudCurvature[ind] > _edge_threshold && 
             segInfo.segmented_cloud_ground_flag[ind] == false) {
           largestPickedNum++;
           if (largestPickedNum <= 2) {
@@ -622,7 +652,8 @@ void FeatureAssociation::findCorrespondingCornerFeatures(int iterCount) {
   for (int i = 0; i < cornerPointsSharpNum; i++) {
     PointType pointSel;
     TransformToStart(&cornerPointsSharp->points[i], &pointSel);
-
+    if(!pcl::isFinite(pointSel))
+      continue;
     if (iterCount % 5 == 0) {
       kdtreeCornerLast.nearestKSearch(pointSel, 1, pointSearchInd,
                                        pointSearchSqDis);
@@ -740,7 +771,8 @@ void FeatureAssociation::findCorrespondingSurfFeatures(int iterCount) {
   for (int i = 0; i < surfPointsFlatNum; i++) {
     PointType pointSel;
     TransformToStart(&surfPointsFlat->points[i], &pointSel);
-
+    if(!pcl::isFinite(pointSel))
+      continue;
     if (iterCount % 5 == 0) {
       kdtreeSurfLast.nearestKSearch(pointSel, 1, pointSearchInd,
                                      pointSearchSqDis);
@@ -1330,17 +1362,6 @@ void FeatureAssociation::assignMappingOdometry(float (&ts)[6]){
     mappingOdometry.pose.pose.position.y = ts[4];
     mappingOdometry.pose.pose.position.z = ts[5];
     //pubLaserOdometry->publish(mappingOdometry);
-
-    laserOdometryTrans.header.stamp = cloudHeader.stamp;
-    laserOdometryTrans.transform.rotation.x = -geoQuat.y;
-    laserOdometryTrans.transform.rotation.y = -geoQuat.z;
-    laserOdometryTrans.transform.rotation.z = geoQuat.x;
-    laserOdometryTrans.transform.rotation.w = geoQuat.w;
-    laserOdometryTrans.transform.translation.x = ts[3];
-    laserOdometryTrans.transform.translation.y = ts[4];
-    laserOdometryTrans.transform.translation.z = ts[5];
-
-    //tf_broadcaster_->sendTransform(laserOdometryTrans);
 }
 
 void FeatureAssociation::publishOdometryPath() {
@@ -1365,7 +1386,7 @@ void FeatureAssociation::publishOdometryPath() {
   pubOriginizedLaserOdometryPath->publish(laser_odom_path_);
 
   //-------------------------------------------
-  quat_tf.setRPY(transformWheelOdometrySum[2], -transformWheelOdometrySum[0], -transformWheelOdometrySum[1]);
+  quat_tf.setRPY(transformExternalOdometrySum[2], -transformExternalOdometrySum[0], -transformExternalOdometrySum[1]);
   tf2::convert(quat_tf, geoQuat);  
 
   geometry_msgs::msg::PoseStamped tmp_pose2;
@@ -1374,9 +1395,9 @@ void FeatureAssociation::publishOdometryPath() {
   tmp_pose2.pose.orientation.y = -geoQuat.z;
   tmp_pose2.pose.orientation.z = geoQuat.x;
   tmp_pose2.pose.orientation.w = geoQuat.w;
-  tmp_pose2.pose.position.x = transformWheelOdometrySum[3];
-  tmp_pose2.pose.position.y = transformWheelOdometrySum[4];
-  tmp_pose2.pose.position.z = transformWheelOdometrySum[5];
+  tmp_pose2.pose.position.x = transformExternalOdometrySum[3];
+  tmp_pose2.pose.position.y = transformExternalOdometrySum[4];
+  tmp_pose2.pose.position.z = transformExternalOdometrySum[5];
   wheel_odom_path_.poses.push_back(tmp_pose2);
   pubOriginizedWheelOdometryPath->publish(wheel_odom_path_);
 }
@@ -1475,8 +1496,7 @@ void FeatureAssociation::runFeatureAssociation() {
   cloudHeader = segInfo.header;
   cloudHeader.stamp = clock_->now();
   trans_c2s_ = projection.trans_c2s;
-  trans_c2b_ = projection.trans_c2b;
-  baselink_frame_ = projection.trans_c2b.child_frame_id;
+  baselink_frame_ = "base_link";
   tf2_trans_b2s_.setOrigin(tf2::Vector3(projection.trans_b2s.transform.translation.x, 
                               projection.trans_b2s.transform.translation.y, projection.trans_b2s.transform.translation.z));
   tf2_trans_b2s_.setRotation(tf2::Quaternion(projection.trans_b2s.transform.rotation.x, 
@@ -1488,18 +1508,13 @@ void FeatureAssociation::runFeatureAssociation() {
     _vertical_scans = projection.vertical_scans;
     _horizontal_scans = projection.horizontal_scans;
     _scan_period = projection.scan_period;  
-    initializationValue();
+    initializeValue();
 
     //@ inital default value
-    wheelOdometry.pose.pose.orientation.w = 1.0;
-    wheelOdometry.header.frame_id = "odom";
-    wheelOdometry.child_frame_id = baselink_frame_;
+    exteralOdometry.pose.pose.orientation.w = 1.0;
+    exteralOdometry.header.frame_id = "odom";
+    exteralOdometry.child_frame_id = baselink_frame_;
 
-    tf2::Matrix3x3 m(tf2_trans_b2s_.getRotation());
-    double roll, pitch, yaw;
-    m.getRPY(roll, pitch, yaw);
-    // handle pitch at this stage
-    transformLaserOdometrySum[0] = pitch;
     initialize_laser_odom_at_first_frame_ = true;
     return;
   }
@@ -1519,14 +1534,14 @@ void FeatureAssociation::runFeatureAssociation() {
     return;
   }
 
-  updateTransformation();
-  integrateTransformation();
-
   if(odom_type_=="laser_odometry"){
+    updateTransformation();
+    integrateTransformation();
+    exteralOdometry.header.stamp = cloudHeader.stamp;
     assignMappingOdometry(transformLaserOdometrySum);
   }
   else{
-    assignMappingOdometry(transformWheelOdometrySum);
+    assignMappingOdometry(transformExternalOdometrySum);
   }
 
   //publishOdometryPath();
@@ -1551,11 +1566,11 @@ void FeatureAssociation::runFeatureAssociation() {
     out.cloud_patched_ground_last = projection.patched_ground;
     out.cloud_patched_ground_edge_last = projection.patched_ground_edge;
 
-    out.laser_odometry = mappingOdometry;
+    out.decisive_odometry = mappingOdometry;
     out.trans_c2s = trans_c2s_;
-    out.trans_c2b = trans_c2b_;
-    out.wheel_odometry = wheelOdometry;
-    out.broadcast_odom_tf = !odom_tf_alive_;
+    out.trans_b2s = projection.trans_b2s;
+    out.trans_m2ci = projection.trans_m2ci;
+    out.external_odometry = exteralOdometry;
     _output_channel.send(std::move(out));
   }
   

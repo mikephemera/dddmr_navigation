@@ -69,4 +69,5 @@ class SemanticSegmentation2PointCloud : public rclcpp::Node
     int height_end_;
     std::map<char, pcl::PointCloud<pcl::PointXYZI>> xyzi_map_;
     std::map<unsigned int, pcl::PointCloud<pcl::PointXYZRGB>> xyzrgb_map_;
+    std::vector<long int> exclude_class_vector_;
 };

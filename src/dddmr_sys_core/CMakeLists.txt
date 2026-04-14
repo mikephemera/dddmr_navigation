@@ -34,6 +34,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/GetPlan.action"
   "action/RecoveryBehaviors.action"
   "action/TagDocking.action"
+  "srv/GetKeyFrameCloud.srv"
   DEPENDENCIES builtin_interfaces geometry_msgs std_msgs action_msgs nav_msgs sensor_msgs
 )
 

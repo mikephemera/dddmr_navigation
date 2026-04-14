@@ -53,4 +53,18 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ros2 launch dddmr_semantic_segmentation rs_semantic_segmentaton_trt_launch.py
 ```
+#### 5. Run exclusive point cloud segmentation
+Download bag file for example, in your host (not in docker!)
+```
+cd ~/dddmr_navigation/src/dddmr_semantic_segmentation/
+./download_files.bash
+```
+In your docker
+```
+ros2 launch dddmr_semantic_segmentation bag_exclude_ss_trt_launch.py
+```
+The class 0 is excluded from pointcloud. Class number can be checked here:
 
+https://github.com/dfl-rlab/dddmr_navigation/blob/main/src/dddmr_semantic_segmentation/data/colors_mapillary.csv
+
+For example, sidewalk is 0, parking is 1.

@@ -100,8 +100,8 @@ class Marking{
 
   public:
 
-    Marking(DynamicGraph* dg, double inscribed_radius, double inflation_radius, const std::shared_ptr<perception_3d::SharedData>& shared_data, double xy_resolution, double height_resolution):
-      dGraph_(dg), inscribed_radius_(inscribed_radius), inflation_radius_(inflation_radius), shared_data_(shared_data), xy_resolution_(xy_resolution), height_resolution_(height_resolution){};
+    Marking(std::string m_name, DynamicGraph* dg, double inscribed_radius, double inflation_radius, const std::shared_ptr<perception_3d::SharedData>& shared_data, double xy_resolution, double height_resolution):
+      name_(m_name), dGraph_(dg), inscribed_radius_(inscribed_radius), inflation_radius_(inflation_radius), shared_data_(shared_data), xy_resolution_(xy_resolution), height_resolution_(height_resolution){};
     
     ~Marking();
 
@@ -123,8 +123,10 @@ class Marking{
     marking_t::iterator getEnd(){return marking_.end();};
 
     double get_dGraphValue(const unsigned int index){
-      if (dGraph_->graph_.find(index) == dGraph_->graph_.end())
+      if (dGraph_->graph_.find(index) == dGraph_->graph_.end()){
+        RCLCPP_INFO(rclcpp::get_logger(name_), "dGraph is queried without initialization, make sure your sensor topic is published and TF setup is correct.");
         return 0.0;
+      }
       return dGraph_->getValue(index);
     };
 
@@ -132,6 +134,9 @@ class Marking{
     std::map<int, double> lethal_map_;
     
   private:
+
+    std::string name_;
+
     //@ Voxel structure
     marking_t marking_;
 

@@ -1,6 +1,7 @@
 #include "imageProjection.h"
 #include "featureAssociation.h"
 #include "mapOptimization.h"
+#include "lego_loam_map_visualization.hpp"
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -36,6 +37,7 @@ class BagReader : public rclcpp::Node
     float history_keyframe_search_radius_;
     bool save_current_map_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr raw_point_cloud_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr raw_odom_pub_;
 
   private:
 
@@ -74,6 +76,7 @@ BagReader::BagReader():Node("bag_reader"), pause_mapping_(true), save_current_ma
   RCLCPP_INFO(this->get_logger(), "skip_frame: %d", skip_frame_);  
 
   raw_point_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(point_cloud_topic_, 1);  
+  raw_odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(odometry_topic_, 1);  
 
   sub_pause_ = this->create_subscription<std_msgs::msg::Bool>(
         "lego_loam_bag_pause", 1,
@@ -119,6 +122,7 @@ int main(int argc, char** argv) {
   auto MO = std::make_shared<MapOptimization>("lego_loam_mo", association_out_channel);
   auto BR = std::make_shared<BagReader>();
   auto IPGE = std::make_shared<InteractivePoseGraphEditor>("interactive_pose_graph_editor", MO);
+  auto LLV = std::make_shared<LegoLoamVisualization>("lego_loam_map_visualization");
   
   IP->tfInitial();
   FA->tfInitial();
@@ -152,6 +156,7 @@ int main(int argc, char** argv) {
     if(BR->pause_mapping_){
       rclcpp::spin_some(BR);
       rclcpp::spin_some(IPGE);
+      rclcpp::spin_some(LLV);
       if(BR->save_current_map_){
         std::shared_ptr<std_srvs::srv::Empty::Request> request;
         std::shared_ptr<std_srvs::srv::Empty::Response> response;
@@ -178,6 +183,7 @@ int main(int argc, char** argv) {
       nav_msgs::msg::Odometry::SharedPtr odom;
       odom = std::make_shared<nav_msgs::msg::Odometry>();
       *odom = msg;
+      BR->raw_odom_pub_->publish(msg);
       FA->odomHandler(odom);
       if(!go_first_odom){
         BR->first_odom_stamp_ = msg.header.stamp;
@@ -202,24 +208,34 @@ int main(int argc, char** argv) {
       msg.header.stamp = zero_time_stamp;
       BR->raw_point_cloud_pub_->publish(msg);
       IP->cloudHandler(laserCloudMsg);
+      if(!IP->pc_valid_){
+        continue;
+      }
+      
       bool FA_ready = FA->systemInitedLM; //This line should come before FA->runFeatureAssociation()
       FA->runFeatureAssociation();
       nav_msgs::msg::Odometry::SharedPtr mapping_odom;
       mapping_odom = std::make_shared<nav_msgs::msg::Odometry>();
       *mapping_odom = FA->mappingOdometry;
-
       if(FA_ready && cycle_cnt%BR->skip_frame_==0){
 
         MO->run();
+        LLV->trans_m2ci_af3_ = MO->trans_m2ci_af3_;
+        LLV->has_m2ci_ = true;
+        *(LLV->cloudKeyPoses3D) = *(MO->cloudKeyPoses3D);
+        *(LLV->cloudKeyPoses6D) = *(MO->cloudKeyPoses6D);
+        LLV->key_frame_clouds_ = MO->cornerCloudKeyFrames;
+        LLV->patchedGroundKeyFrames = MO->patchedGroundKeyFrames;
+        LLV->patchedGroundEdgeKeyFrames = MO->patchedGroundEdgeKeyFrames;
         gettimeofday(&inloop, NULL);
         double inloop_t = inloop.tv_sec + double(inloop.tv_usec) / 1e6;
         if(inloop_t - last_global_map_pub_time > 1.0){
-          MO->publishGlobalMapThread();
+          LLV->pubMapThread();
           last_global_map_pub_time = inloop_t;
         }
         
         MO->loopClosureThread();
-        MO->groundEdgeDetectionThread();
+        //MO->groundEdgeDetectionThread();
       }
       else if(FA_ready){
         MO->runWoLO();
@@ -247,6 +263,7 @@ int main(int argc, char** argv) {
       MO->pcdSaver(request, response);
       BR->save_current_map_ = false;
     }
+    
     rclcpp::spin_some(BR); 
   }
   std::shared_ptr<std_srvs::srv::Empty::Request> request;

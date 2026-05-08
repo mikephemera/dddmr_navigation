@@ -53,6 +53,10 @@ void Local_Planner::initial(
   this->get_parameter("odom_topic_qos", odom_topic_qos_);
   RCLCPP_INFO(this->get_logger(), "odom_topic_qos: %s", odom_topic_qos_.c_str());
 
+  declare_parameter("ackermann_drive_topic", rclcpp::ParameterValue("ackermann_drive"));
+  this->get_parameter("ackermann_topic", ackermann_topic_);
+  RCLCPP_INFO(this->get_logger(), "ackermann_topic: %s", ackermann_topic_.c_str());
+
   declare_parameter("compute_best_trajectory_in_odomCb", rclcpp::ParameterValue(false));
   this->get_parameter("compute_best_trajectory_in_odomCb", compute_best_trajectory_in_odomCb_);
   RCLCPP_INFO(this->get_logger(), "compute_best_trajectory_in_odomCb: %d", compute_best_trajectory_in_odomCb_);
@@ -132,6 +136,10 @@ void Local_Planner::initial(
       std::bind(&Local_Planner::cbOdom, this, std::placeholders::_1), sub_options);
   }
   
+  ackermann_drive_ros_sub_ = this->create_subscription<ackermann_msgs::msg::AckermannDriveStamped>(
+      ackermann_topic_, rclcpp::QoS(rclcpp::KeepLast(1)).durability_volatile().best_effort(),
+      std::bind(&Local_Planner::cbAckermannDrive, this, std::placeholders::_1), sub_options);
+
   //@Initial pcl ptr
   pcl_global_plan_.reset(new pcl::PointCloud<pcl::PointXYZ>);
   kdtree_global_plan_.reset(new pcl::KdTreeFLANN<pcl::PointXYZ>());
@@ -193,6 +201,10 @@ void Local_Planner::cbOdom(const nav_msgs::msg::Odometry::SharedPtr msg)
   got_odom_ = true;
 }
 
+void Local_Planner::cbAckermannDrive(const ackermann_msgs::msg::AckermannDriveStamped::SharedPtr msg){
+  ackermann_drive_state_ = *msg;
+  updateGlobalPose();
+}
 
 double Local_Planner::getShortestAngleFromPose2RobotHeading(tf2::Transform m_pose){
 
@@ -536,6 +548,7 @@ dddmr_sys_core::PlannerState Local_Planner::computeVelocityCommand(std::string t
   //Below assignment of variables is useful when migrate to ROS2
   trajectory_generators_ros_->getSharedDataPtr()->robot_pose_ = trans_gbl2b_;
   trajectory_generators_ros_->getSharedDataPtr()->robot_state_ = robot_state_;
+  trajectory_generators_ros_->getSharedDataPtr()->ackermann_drive_state_ = ackermann_drive_state_;
   trajectory_generators_ros_->getSharedDataPtr()->prune_plan_ = prune_plan_;
   //@ change max speed from perception shared data framework
   trajectory_generators_ros_->getSharedDataPtr()->current_allowed_max_linear_speed_ 
@@ -588,6 +601,7 @@ dddmr_sys_core::PlannerState Local_Planner::computeVelocityCommand(std::string t
   //@ keep below for easy migration for ROS2
   mpc_critics_ros_->getSharedDataPtr()->robot_pose_ = trans_gbl2b_;
   mpc_critics_ros_->getSharedDataPtr()->robot_state_ = robot_state_;
+  mpc_critics_ros_->getSharedDataPtr()->ackermann_drive_state_ = ackermann_drive_state_;
   mpc_critics_ros_->getSharedDataPtr()->pcl_perception_ = perception_3d_ros_->getSharedDataPtr()->aggregate_observation_;
   mpc_critics_ros_->getSharedDataPtr()->prune_plan_ = prune_plan_;
   //@ Below function transform prune_plane from nav::msg to pcl type

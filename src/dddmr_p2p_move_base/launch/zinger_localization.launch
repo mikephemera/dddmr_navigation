@@ -1,14 +1,11 @@
 <launch>
 
-  <!--- TF -->
-  <node pkg="tf2_ros" exec="static_transform_publisher" name="map2odom"  args="7.85 10.0 0.0 0.0 0.0 0.0 map odom" />
-
   <node pkg="global_planner" exec="occupancy2ground" output="screen" respawn="false">
     <param from="$(find-pkg-share p2p_move_base)/config/zinger_localization.yaml" />
   </node>
 
   <!--name argument is not required, because it will overwrite all node name in the exec-->
-  <node pkg="global_planner" exec="global_planner_node" output="screen" respawn="false" launch-prefix="xterm -e gdb --args">
+  <node pkg="global_planner" exec="global_planner_node" output="screen" respawn="false">
     <param from="$(find-pkg-share p2p_move_base)/config/zinger_localization.yaml" />
   </node>
 

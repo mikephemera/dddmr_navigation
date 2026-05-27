@@ -198,7 +198,7 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
 
   declare_parameter("imageProjection.use_sensor_height_to_filter_out_ground", rclcpp::ParameterValue(false));
   this->get_parameter("imageProjection.use_sensor_height_to_filter_out_ground", use_sensor_height_to_filter_out_ground_);
-  RCLCPP_INFO(this->get_logger(), "imageProjection.use_sensor_height_to_filter_out_ground: %.6f", use_sensor_height_to_filter_out_ground_);
+  RCLCPP_INFO(this->get_logger(), "imageProjection.use_sensor_height_to_filter_out_ground: %d", use_sensor_height_to_filter_out_ground_);
 
   declare_parameter("imageProjection.patch_first_ring_to_baselink", rclcpp::ParameterValue(true));
   this->get_parameter("imageProjection.patch_first_ring_to_baselink", patch_first_ring_to_baselink_);

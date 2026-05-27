@@ -33,11 +33,11 @@ private:
 
   void m2ci_callback(const geometry_msgs::msg::TransformStamped::SharedPtr msg);
   void cloudKeyPoses6D_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
-  void syncGroundThread();
+  void syncMapAndGroundThread();
   pcl::PointCloud<PointType>::Ptr transformPointCloud(pcl::PointCloud<PointType>::Ptr cloudIn, PointTypePose *transformIn);
   pcl::PointCloud<PointType>::Ptr transformPointCloudInverse(pcl::PointCloud<PointType>::Ptr cloudIn, PointTypePose *transformIn);
 
-  rclcpp::TimerBase::SharedPtr sync_ground_timer_;
+  rclcpp::TimerBase::SharedPtr sync_map_and_ground_timer_;
   rclcpp::TimerBase::SharedPtr map_publish_timer_;
   rclcpp::TimerBase::SharedPtr timer_ground_edge_detection_;
   rclcpp::Client<dddmr_sys_core::srv::GetKeyFrameCloud>::SharedPtr get_key_frame_cloud_client_;

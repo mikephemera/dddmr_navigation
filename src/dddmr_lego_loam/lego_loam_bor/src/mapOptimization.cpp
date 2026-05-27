@@ -76,9 +76,9 @@ MapOptimization::MapOptimization(std::string name,
   pubM2Ci = this->create_publisher<geometry_msgs::msg::TransformStamped>("lego_loam/m2ci", 1);  
   pubC2S = this->create_publisher<geometry_msgs::msg::TransformStamped>("lego_loam/c2s", 1);  
   pubB2S = this->create_publisher<geometry_msgs::msg::TransformStamped>("lego_loam/c2s", 1);  
-  pubMap = this->create_publisher<sensor_msgs::msg::PointCloud2>("lego_loam_map", 1);  
-  pubGround = this->create_publisher<sensor_msgs::msg::PointCloud2>("lego_loam_ground", 1);  
-  pubGroundEdge = this->create_publisher<sensor_msgs::msg::PointCloud2>("lego_loam_ground_edge", 1);
+  //pubMap = this->create_publisher<sensor_msgs::msg::PointCloud2>("lego_loam_map", 1);  
+  //pubGround = this->create_publisher<sensor_msgs::msg::PointCloud2>("lego_loam_ground", 1);  
+  //pubGroundEdge = this->create_publisher<sensor_msgs::msg::PointCloud2>("lego_loam_ground_edge", 1);
     
   //TF broadcaster
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);

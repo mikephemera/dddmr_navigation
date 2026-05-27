@@ -41,9 +41,9 @@ LegoLoamVisualization::LegoLoamVisualization(std::string name) : Node(name)
   get_key_frame_cloud_client_ = this->create_client<dddmr_sys_core::srv::GetKeyFrameCloud>("get_key_frame_cloud", rmw_qos_profile_services_default, cbs_group_);
 
   // Initialize Timer
-  sync_ground_timer_ = this->create_wall_timer(
+  sync_map_and_ground_timer_ = this->create_wall_timer(
     100ms,
-    std::bind(&LegoLoamVisualization::syncGroundThread, this), cbs_group_);
+    std::bind(&LegoLoamVisualization::syncMapAndGroundThread, this), cbs_group_);
 
   // Initialize Ground Publish Timer
   map_publish_timer_ = this->create_wall_timer(
@@ -74,7 +74,7 @@ void LegoLoamVisualization::cloudKeyPoses6D_callback(const sensor_msgs::msg::Poi
   
 }
 
-void LegoLoamVisualization::syncGroundThread()
+void LegoLoamVisualization::syncMapAndGroundThread()
 {
 
   auto request = std::make_shared<dddmr_sys_core::srv::GetKeyFrameCloud::Request>();

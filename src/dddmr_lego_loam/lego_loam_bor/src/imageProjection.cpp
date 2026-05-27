@@ -110,9 +110,9 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
   this->get_parameter("laser.odom_type", odom_type_);
   RCLCPP_INFO(this->get_logger(), "laser.odom_type: %s", odom_type_.c_str());
   
-  declare_parameter("laser.baselink_frame", rclcpp::ParameterValue(""));
-  this->get_parameter("laser.baselink_frame", baselink_frame_);
-  RCLCPP_INFO(this->get_logger(), "laser.baselink_frame: %s", baselink_frame_.c_str());
+  declare_parameter("laser.base_ground_frame", rclcpp::ParameterValue("base_link"));
+  this->get_parameter("laser.base_ground_frame", base_ground_frame_);
+  RCLCPP_INFO(this->get_logger(), "laser.base_ground_frame: %s", base_ground_frame_.c_str());
   
   declare_parameter("imageProjection.maximum_detection_range", rclcpp::ParameterValue(0.0));
   this->get_parameter("imageProjection.maximum_detection_range", _maximum_detection_range);
@@ -195,6 +195,10 @@ ImageProjection::ImageProjection(std::string name, Channel<ProjectionOut>& outpu
   declare_parameter("imageProjection.ground_dz_tolerance", rclcpp::ParameterValue(0.1));
   this->get_parameter("imageProjection.ground_dz_tolerance", ground_dz_tolerance_);
   RCLCPP_INFO(this->get_logger(), "imageProjection.ground_dz_tolerance: %.6f", ground_dz_tolerance_);
+
+  declare_parameter("imageProjection.use_sensor_height_to_filter_out_ground", rclcpp::ParameterValue(false));
+  this->get_parameter("imageProjection.use_sensor_height_to_filter_out_ground", use_sensor_height_to_filter_out_ground_);
+  RCLCPP_INFO(this->get_logger(), "imageProjection.use_sensor_height_to_filter_out_ground: %.6f", use_sensor_height_to_filter_out_ground_);
 
   declare_parameter("imageProjection.patch_first_ring_to_baselink", rclcpp::ParameterValue(true));
   this->get_parameter("imageProjection.patch_first_ring_to_baselink", patch_first_ring_to_baselink_);
@@ -301,7 +305,7 @@ bool ImageProjection::allEssentialTFReady(std::string sensor_frame){
     try
     {
       trans_b2s_ = tf2Buffer_->lookupTransform(
-          baselink_frame_, sensor_frame_, tf2::TimePointZero);
+          base_ground_frame_, sensor_frame_, tf2::TimePointZero);
       
       tf2_trans_b2s_.setRotation(tf2::Quaternion(trans_b2s_.transform.rotation.x, trans_b2s_.transform.rotation.y, trans_b2s_.transform.rotation.z, trans_b2s_.transform.rotation.w));
       tf2_trans_b2s_.setOrigin(tf2::Vector3(trans_b2s_.transform.translation.x, trans_b2s_.transform.translation.y, trans_b2s_.transform.translation.z));
@@ -812,6 +816,17 @@ void ImageProjection::zPitchRollFeatureRemoval() {
           //_segmented_cloud_pure->push_back(_full_cloud->points[lowerInd]);
           continue;
         }
+
+        //@ filter by z from ground to sensor, this is only useful when in a flat environment.
+        if(use_sensor_height_to_filter_out_ground_){
+          if(trans_b2s_.transform.translation.z+lowerInd_left_pt_no_pitch.z>0.1 || 
+            trans_b2s_.transform.translation.z+lowerInd_right_pt_no_pitch.z>0.1 || 
+            trans_b2s_.transform.translation.z+lowerInd_pt_no_pitch.z>0.1 ){
+            do_patch = false;
+            continue;
+          }
+        }
+
 
         if(i<closest_ring_edge) //we dont casting the last one
           closest_ring_edge = i;

@@ -87,7 +87,7 @@ class ImageProjection : public rclcpp::Node
     int _segment_valid_point_num;
     int _segment_valid_line_num;
     std::string odom_type_;
-    std::string baselink_frame_, sensor_frame_;
+    std::string base_ground_frame_, sensor_frame_;
 
     Channel<ProjectionOut>& _output_channel;
 
@@ -156,6 +156,9 @@ class ImageProjection : public rclcpp::Node
     double ignore_positive_stop_;
     double ignore_negative_start_;
     double ignore_negative_stop_;
+
+    bool use_sensor_height_to_filter_out_ground_;
+    
 #ifdef TRT_ENABLED
     std::shared_ptr<YoloV8> yolov8_;
 #endif

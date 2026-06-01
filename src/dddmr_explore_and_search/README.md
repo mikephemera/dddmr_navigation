@@ -1,4 +1,9 @@
 # dddmr_explore_and_search
+
+<p align='center'>
+    <img src="https://github.com/dfl-rlab/dddmr_documentation_materials/blob/main/dddmr_explore_and_search/explore.gif" width="640" height="320"/><p align='center'>Explore and Navigation</p>
+</p>
+
 This package demonstrate a random exploring strategy using the ground explored edge.
 The structure is comprised of:
 1. SLAM

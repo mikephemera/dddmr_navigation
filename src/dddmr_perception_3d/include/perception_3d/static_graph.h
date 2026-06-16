@@ -28,8 +28,8 @@
 * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#ifndef PERCEPTIO_3D_STATIC_GRAPH_H_
-#define PERCEPTIO_3D_STATIC_GRAPH_H_
+#ifndef PERCEPTION_3D_STATIC_GRAPH_H_
+#define PERCEPTION_3D_STATIC_GRAPH_H_
 
 /*For graph*/
 #include <unordered_map>
@@ -50,8 +50,9 @@ class StaticGraph{
   public:
     StaticGraph();
     ~StaticGraph();
-    void insertNode(unsigned int node, edge_t& a_edge);
-    void insertWeight(unsigned int node, float weight);
+    void allocateGraph(unsigned long int m_size);
+    void insertEdgeInNode(unsigned int node, edge_t& a_edge);
+    void insertPenality(unsigned int node, float weight);
     graph_t* getGraphPtr();
     edges_t getEdge(unsigned int node);
     float getNodeWeight(unsigned int node);

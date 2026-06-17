@@ -329,8 +329,10 @@ bool ImageProjection::allEssentialTFReady(std::string sensor_frame){
       tf2::Quaternion qm2ci;
       tf2::Matrix3x3 m(tf2_trans_b2s_.getRotation());
       double sensor_install_roll, sensor_install_yaw;
+      //@ When pitch is greater than 1.5707, getRPY will return roll factor due to shortest angle
       m.getRPY(sensor_install_roll, sensor_install_pitch_, sensor_install_yaw);
-      qm2ci.setRPY(1.570795 + sensor_install_pitch_, 0.0, 1.570795);
+      //RCLCPP_INFO(this->get_logger(), "%.2f, %.2f, %.2f", sensor_install_roll, sensor_install_pitch_, sensor_install_yaw);
+      qm2ci.setRPY(1.570795 + sensor_install_pitch_, sensor_install_roll, 1.570795);
       trans_m2ci_.transform.translation.x = 0.0; trans_m2ci_.transform.translation.y = 0.0; trans_m2ci_.transform.translation.z = 0.0;
       trans_m2ci_.transform.rotation.x = qm2ci.x(); trans_m2ci_.transform.rotation.y = qm2ci.y();
       trans_m2ci_.transform.rotation.z = qm2ci.z(); trans_m2ci_.transform.rotation.w = qm2ci.w();

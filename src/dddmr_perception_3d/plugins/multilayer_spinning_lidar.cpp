@@ -360,6 +360,9 @@ void MultiLayerSpinningLidar::selfMark(){
   Eigen::Affine3d trans_gbl2b_af3 = tf2::transformToEigen(trans_gbl2b_);
   pcl::transformPointCloud(*pcl_msg_, *pcl_msg_gbl_, trans_gbl2b_af3);
   pcl_msg_gbl_->header.frame_id = gbl_utils_->getGblFrame();
+  std::vector<int> indices;
+  pcl_msg_gbl_->is_dense = false;
+  pcl::removeNaNFromPointCloud(*pcl_msg_gbl_, *pcl_msg_gbl_, indices);
 
   pcl::search::KdTree<pcl::PointXYZ>::Ptr pc_kdtree (new pcl::search::KdTree<pcl::PointXYZ>);
   pc_kdtree->setInputCloud (pcl_msg_gbl_);
@@ -722,7 +725,7 @@ void MultiLayerSpinningLidar::selfClear(){
     pcl::toROSMsg(*pc_current_window_, ros_pc2_msg);
     pub_current_window_marking_->publish(ros_pc2_msg);     
   }
-  
+
 }
 
 void MultiLayerSpinningLidar::getCastingPointCloud(pcl::PointXYZ& cluster_center, pcl::PointCloud<pcl::PointXYZI>& pc_for_check){

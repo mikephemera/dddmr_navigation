@@ -45,8 +45,8 @@ perception_3d_global:
       support:
         mapping_mode: false
           #if mapping mode is true, edge detection is automatically disabled
-        enable_edge_detection: false
-        generate_static_graph: true
+        enable_edge_detection: true
+        generate_static_graph: false
           #the connection radius will be used
           #enable this value when using super dense ground say ground voxel size<=10 cm
 
@@ -56,5 +56,5 @@ global_planner:
   ros__parameters:
     turning_weight: 0.1 #Punish the zig-zag path
     a_star_expanding_radius: 0.2
-    use_pre_graph: true
+    use_pre_graph: false
       #if we want global planner to use pre-static graph, remember to set generate_static_graph to true under perception_3d::StaticLayer

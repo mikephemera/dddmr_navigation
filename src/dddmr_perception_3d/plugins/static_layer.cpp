@@ -245,7 +245,7 @@ void StaticLayer::selfClear(){
 
 void StaticLayer::generateStaticGraph(){
   
-  //#pragma omp parallel for
+  #pragma omp parallel for
   for(unsigned int index_cnt = 0; index_cnt<pcl_ground_->points.size(); index_cnt++){
 
     pcl::PointXYZI pcl_node = pcl_ground_->points[index_cnt];
@@ -294,14 +294,18 @@ void StaticLayer::generateStaticGraph(){
       if(distance_to_obstacle < gbl_utils_->getInscribedRadius())
         dGraph_.setValue(index_cnt, distance_to_obstacle);
     }
-    index_cnt++;
   }
 }
 
 void StaticLayer::radiusSearchConnection(){
   
+  // 1. Determine total loop size
+  const unsigned int total_points = pcl_ground_->points.size();
+
+  // 2. OpenMP Parallel For Loop
+  // We specify that 'index_cnt' is the loop variable (implicitly private)
   #pragma omp parallel for
-  for(unsigned int index_cnt = 0; index_cnt<pcl_ground_->points.size(); index_cnt++){
+  for(unsigned int index_cnt = 0; index_cnt < total_points; index_cnt++){
     
     pcl::PointXYZI pcl_node = pcl_ground_->points[index_cnt];
 
@@ -309,10 +313,10 @@ void StaticLayer::radiusSearchConnection(){
     std::vector<int> pointIdxRadiusSearch;
     std::vector<float> pointRadiusSquaredDistance;
     if(!use_adaptive_connection_){
+      // kdtree radiusSearch is thread-safe for concurrent reads
       shared_data_->kdtree_ground_->radiusSearch (pcl_node, radius_of_ground_connection_, pointIdxRadiusSearch, pointRadiusSquaredDistance);
     }
     else{
-
       int hard_interrupt_cnt = 100;
       float search_r = 0.5;
       int search_cnt = 1;
@@ -329,6 +333,7 @@ void StaticLayer::radiusSearchConnection(){
       }
     }
     
+    // Allocating objects inside the loop ensures they are thread-local (private)
     pcl::PointCloud<pcl::PointXYZI>::Ptr nn_pc (new pcl::PointCloud<pcl::PointXYZI>);
     for(auto it = pointIdxRadiusSearch.begin(); it!=pointIdxRadiusSearch.end();it++){
       //@Push bach the points for plane equation later
@@ -336,23 +341,21 @@ void StaticLayer::radiusSearchConnection(){
     }
 
     float weight = 1.0;
-    float intensity_penality = 1.0;
-    float max_radius = intensity_search_radius_; //this value is suggested to be 1.0 meters, because if it is too large, the narrow passage will be miscalculated
-
+    float intensity_penality = 0.0;
+    float max_radius = intensity_search_radius_; 
+    int reject_threshold = 0;
     //@ consider this scenario to be boundary of ground
     if(nn_pc->points.size()<5){
-      //This node is orphan, set high weight to it
       weight = 1000;
     }
     else{
       //@Use RANSAC to get normal
       pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
       pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
-      // Create the segmentation object
+      
+      // Creating the segmentation object locally per thread
       pcl::SACSegmentation<pcl::PointXYZI> seg;
-      // Optional
       seg.setOptimizeCoefficients (true);
-      // Mandatory
       seg.setModelType (pcl::SACMODEL_PLANE);
       seg.setMethodType (pcl::SAC_RANSAC);
       seg.setDistanceThreshold (0.05); 
@@ -360,10 +363,6 @@ void StaticLayer::radiusSearchConnection(){
       seg.setInputCloud (nn_pc);
       seg.segment (*inliers, *coefficients);
       
-      //@We get planar equation (coefficients), we now calculate z by iterate x,y value
-      //@We use polar coordinate to generate points (i.e.: iterate theta with given radius)
-      //@We search multiple rings
-      int reject_threshold = 0;
       for(float ring_radius=max_radius; ring_radius>0; ring_radius-=0.25){
         for(float d_theta=-3.1415926; d_theta<=3.1415926; d_theta+=0.174){ //per 10 deg
           pcl::PointXYZI pcl_ring;
@@ -372,19 +371,17 @@ void StaticLayer::radiusSearchConnection(){
           pcl_ring.z = (-coefficients->values[3]-coefficients->values[0]*pcl_ring.x-coefficients->values[1]*pcl_ring.y)/coefficients->values[2];
           if(isinf(pcl_ring.z)){
             pcl_ring.z = 0.0;
-            //RCLCPP_INFO(this->get_logger().get_child(name_), "%.2f,%.2f,%.2f", pcl_ring.x, pcl_ring.y, pcl_ring.z);
           }
           if(std::isnan(pcl_ring.z))
             continue;
-          //@Search around the ring
+          
           std::vector<int> pointIdxRadiusSearch_ring;
           std::vector<float> pointRadiusSquaredDistance_ring;
-          if(shared_data_->kdtree_ground_->radiusSearch (pcl_ring, 0.3, pointIdxRadiusSearch_ring, pointRadiusSquaredDistance_ring)<1) //0.3 is related to resolution, looks good for 0.5 m voxel
+          if(shared_data_->kdtree_ground_->radiusSearch (pcl_ring, 0.3, pointIdxRadiusSearch_ring, pointRadiusSquaredDistance_ring)<1) 
             reject_threshold++;
         }
       }
       intensity_penality += reject_threshold*intensity_search_punish_weight_;
-      
       
       //@ use map to impose weight on each node
       pointIdxRadiusSearch.clear();
@@ -395,6 +392,7 @@ void StaticLayer::radiusSearchConnection(){
         pcl_z_axes->push_back(pcl_map_->points[*i_pcl_z_axes]);
       }
 
+      // Local Filter instantiation
       pcl::PassThrough<pcl::PointXYZI> pass;
       pass.setInputCloud (pcl_z_axes);
       pass.setFilterFieldName ("z");
@@ -408,11 +406,12 @@ void StaticLayer::radiusSearchConnection(){
       pass.setFilterFieldName ("y");
       pass.setFilterLimits (pcl_node.y-0.5, pcl_node.y+0.5);
       pass.filter (*pcl_z_axes);
+      
       if(pcl_z_axes->points.size()>10){
         dGraph_.setValue(index_cnt, 0.25);
       }  
     }
-    shared_data_->sGraph_ptr_->insertPenality(index_cnt, intensity_penality);//make the value of weight to 1.0 for non-weighted A*
+    shared_data_->sGraph_ptr_->insertPenality(index_cnt, intensity_penality);
   }
   RCLCPP_DEBUG(node_->get_logger().get_child(name_), "Static graph has been generated.");
 }

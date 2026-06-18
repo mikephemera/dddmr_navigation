@@ -33,6 +33,11 @@ namespace mcl_3dl
 SubMaps::SubMaps(std::string name) : Node(name), is_current_ready_(false), 
   prepare_warm_up_(false), is_warm_up_ready_(false), is_initial_(false){
   
+  map_current_ = std::make_shared<pcl::PointCloud<pcl_t>>();
+  ground_current_ = std::make_shared<pcl::PointCloud<pcl_t>>();
+  map_warmup_ = std::make_shared<pcl::PointCloud<pcl_t>>();
+  ground_warmup_ = std::make_shared<pcl::PointCloud<pcl_t>>();
+
   clock_ = this->get_clock();
   
   access_ = new sub_maps_mutex_t();
@@ -233,8 +238,8 @@ void SubMaps::warmUpThread(){
       is_current_ready_ = false;
       return;
     }
-    map_current_.reset(new pcl::PointCloud<pcl_t>());
-    ground_current_.reset(new pcl::PointCloud<pcl_t>());
+    map_current_->clear();
+    ground_current_->clear();
     for(auto it=pointIdxRadiusSearch.begin(); it!=pointIdxRadiusSearch.end(); it++){
       *map_current_ += (*cornerCloudKeyFrames_[*it]);
       *ground_current_ += (*surfCloudKeyFrames_[*it]);
@@ -280,8 +285,8 @@ void SubMaps::warmUpThread(){
       prepare_warm_up_ = false;
       return;
     }
-    map_warmup_.reset(new pcl::PointCloud<pcl_t>());
-    ground_warmup_.reset(new pcl::PointCloud<pcl_t>());
+    map_warmup_->clear();
+    ground_warmup_->clear();
     for(auto it=pointIdxRadiusSearch.begin(); it!=pointIdxRadiusSearch.end(); it++){
       *map_warmup_ += (*cornerCloudKeyFrames_[*it]);
       *ground_warmup_ += (*surfCloudKeyFrames_[*it]);
@@ -318,10 +323,10 @@ bool SubMaps::isWarmUpReady(){
 
 void SubMaps::swapKdTree(){
   
-  map_current_.reset(new pcl::PointCloud<pcl_t>());
-  ground_current_.reset(new pcl::PointCloud<pcl_t>());  
-  map_current_ = map_warmup_;
-  ground_current_ = ground_warmup_;
+  map_current_->clear();
+  ground_current_->clear();
+  *map_current_ = *map_warmup_;
+  *ground_current_ = *ground_warmup_;
   kdtree_map_current_ = kdtree_map_warmup_;
   kdtree_ground_current_ = kdtree_ground_warmup_;
   normals_ground_current_ = normals_ground_warmup_;

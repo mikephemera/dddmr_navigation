@@ -468,7 +468,11 @@ void MCL3dlNode::measure(std::map<std::string, pcl::PointCloud<mcl_3dl::pcl_t>::
 
   if(!sub_maps_->isCurrentReady())
     return;
-  
+
+  if(sub_maps_->isWarmUpReady()){
+    sub_maps_->swapKdTree();
+  }
+
   const auto ts = std::chrono::high_resolution_clock::now();
   lidar_measurements_->setGlobalLocalizationStatus(
       params_->num_particles_, pf_->getParticleSize());
@@ -478,30 +482,21 @@ void MCL3dlNode::measure(std::map<std::string, pcl::PointCloud<mcl_3dl::pcl_t>::
   auto measure_func = [this, &pcl_segmentations,
                         &match_ratio_min, &match_ratio_max](const State6DOF& s) -> float
   {
-    float likelihood = 1;
     float qualities;
-
-    //const LidarMeasurementResult result = lidar_measurements_->measure(
-    //    kdtree_map_, kdtree_ground_, normals_ground_, pcl_segmentations, s);
-    
-    if(sub_maps_->isWarmUpReady()){
-      sub_maps_->swapKdTree();
-    }
     const LidarMeasurementResult result = lidar_measurements_->measure(
         sub_maps_->kdtree_map_current_, sub_maps_->kdtree_ground_current_, sub_maps_->normals_ground_current_, pcl_segmentations, s);
 
-    likelihood *= result.likelihood;
     qualities = result.quality;
     if (match_ratio_min > qualities)
       match_ratio_min = qualities;
     if (match_ratio_max < qualities)
       match_ratio_max = qualities;
-
-    return likelihood;
+    return result.likelihood;
   };
+
   //@ pf_->measure(measure_func) will loop particles
   pf_->measure(measure_func);
-  
+
   //@ This block first calculate the weight (p.probability_bias_) based on the particle state
   //@ It means that the particle away from last pose has less weight
   //@ This weight is different from the weight of likelihood

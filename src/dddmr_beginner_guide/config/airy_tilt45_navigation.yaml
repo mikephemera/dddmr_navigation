@@ -80,7 +80,6 @@ mcl_3dl:
     map_downsample_x: 0.1
     map_downsample_y: 0.1
     map_downsample_z: 0.1
-    map_update_interval_sec: 2 #int
     num_particles: 60
 
     resample_var_x: 0.2

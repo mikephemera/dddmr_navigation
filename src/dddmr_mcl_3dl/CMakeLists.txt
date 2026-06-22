@@ -25,8 +25,9 @@ find_package(tf2_sensor_msgs REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(pcl_conversions REQUIRED)
+find_package(dddmr_sys_core REQUIRED)
 
-find_package(PCL REQUIRED)
+find_package(PCL 1.15 REQUIRED QUIET)
 find_package(OpenMP REQUIRED)
 
 set(dependencies
@@ -49,11 +50,13 @@ set(dependencies
   tf2_eigen
   pluginlib
   pcl_conversions
+  dddmr_sys_core
 )
 
 include_directories(
   include
   ${PCL_INCLUDE_DIRS}
+  ${dddmr_sys_core_INCLUDE_DIRS}
   ${OpenMP_CXX_INCLUDE_DIRS}
 )
 

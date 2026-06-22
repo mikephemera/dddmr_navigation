@@ -336,7 +336,7 @@ void StaticLayer::radiusSearchConnection(){
     // Allocating objects inside the loop ensures they are thread-local (private)
     pcl::PointCloud<pcl::PointXYZI>::Ptr nn_pc (new pcl::PointCloud<pcl::PointXYZI>);
     for(auto it = pointIdxRadiusSearch.begin(); it!=pointIdxRadiusSearch.end();it++){
-      //@Push bach the points for plane equation later
+      //@Push back the points for plane equation later
       nn_pc->push_back(pcl_ground_->points[(*it)]);
     }
 
@@ -411,7 +411,7 @@ void StaticLayer::radiusSearchConnection(){
         dGraph_.setValue(index_cnt, 0.25);
       }  
     }
-    shared_data_->sGraph_ptr_->insertPenality(index_cnt, intensity_penality);
+    shared_data_->sGraph_ptr_->setPenality(index_cnt, intensity_penality);
   }
   RCLCPP_DEBUG(node_->get_logger().get_child(name_), "Static graph has been generated.");
 }

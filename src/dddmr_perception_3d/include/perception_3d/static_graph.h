@@ -52,17 +52,17 @@ class StaticGraph{
     ~StaticGraph();
     void allocateGraph(unsigned long int m_size);
     void insertEdgeInNode(unsigned int node, edge_t& a_edge);
-    void insertPenality(unsigned int node, float weight);
+    void setPenality(unsigned int node, float weight);
     graph_t* getGraphPtr();
     edges_t getEdge(unsigned int node);
     float getNodeWeight(unsigned int node);
     void clear();
     unsigned long getSize(){return graph_ptr_->size();};
-    unsigned long getNodeWeightSize(){return node_weight_.size();};
+    unsigned long getNodeWeightSize(){return node_penality_.size();};
 
   private:
     graph_t* graph_ptr_;
-    std::unordered_map<unsigned int, float> node_weight_;
+    std::unordered_map<unsigned int, float> node_penality_;
 
 };
 

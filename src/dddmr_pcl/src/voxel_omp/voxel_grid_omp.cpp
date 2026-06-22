@@ -180,14 +180,20 @@ pcl::VoxelGridOMP::applyFilter(PointCloud &output)
     }
 
     TicToc t_p2v;
-    //global variables
+    // 全局多线程数据容器分配
     std::vector<PointCloudPtr> cloud_all_threads(threads_);
-    for (size_t i = 0; i < threads_; ++i) {
-        cloud_all_threads[i].reset(new PointCloud ());
-    }
     std::vector<std::shared_ptr<std::vector<int>>> index_all_threads(threads_);
     std::vector<std::shared_ptr<std::vector<double>>> weight_all_threads(threads_);
     std::vector<std::shared_ptr<std::vector<Eigen::VectorXf, Eigen::aligned_allocator<Eigen::VectorXf>>>> centroid_all_threads(threads_);
+
+    // 安全修复：必须在进入 OMP 并行块之前完整初始化智能指针。
+    // 如果在并行线程内部初始化这些 shared_ptr，极易引发堆内存竞态死锁或野指针崩溃。
+    for (size_t i = 0; i < threads_; ++i) {
+        cloud_all_threads[i].reset(new PointCloud ());
+        index_all_threads[i] = std::make_shared<std::vector<int>>();
+        weight_all_threads[i] = std::make_shared<std::vector<double>>();
+        centroid_all_threads[i] = std::make_shared<std::vector<Eigen::VectorXf, Eigen::aligned_allocator<Eigen::VectorXf>>>();
+    }
 #pragma omp parallel num_threads(threads_)
     {
         int thread_id = omp_get_thread_num();

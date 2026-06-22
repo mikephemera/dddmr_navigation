@@ -45,7 +45,7 @@ StaticGraph::~StaticGraph(){
 
 void StaticGraph::allocateGraph(unsigned long int m_size){
   for(unsigned long int i=0; i<m_size; i++){
-    node_weight_[i] = 0.0;
+    node_penality_[i] = 0.0;
     edges_t my_edges;
     (*graph_ptr_)[i] = my_edges;
   }
@@ -60,9 +60,10 @@ void StaticGraph::insertEdgeInNode(unsigned int node, edge_t& a_edge){
   }
 }
 
-void StaticGraph::insertPenality(unsigned int node, float weight){
-  if (node_weight_.count(node) > 0) {
-    node_weight_[node] = weight;
+void StaticGraph::setPenality(unsigned int node, float penality){
+  if (node_penality_.count(node) > 0) {
+    if(penality>node_penality_[node])
+      node_penality_[node] = penality;
   }
   else{
     //key is not exist, the initialization is required, we dont insert a key as omp will will be thread safe
@@ -78,11 +79,11 @@ edges_t StaticGraph::getEdge(unsigned int node){
 }
 
 float StaticGraph::getNodeWeight(unsigned int node){
-  return node_weight_[node];
+  return node_penality_[node];
 }
 
 void StaticGraph::clear(){
-  node_weight_.clear();
+  node_penality_.clear();
   (*graph_ptr_).clear();
 }
 

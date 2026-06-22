@@ -1,7 +1,7 @@
 bag_reader:
   ros__parameters:
     use_sim_time: true
-    bag_file_dir: "/root/dddmr_bags/upside_down"
+    bag_file_dir: "/root/dddmr_bags/cicdtest/mapping_mid360_t180"
     point_cloud_topic: "/livox/lidar"
     odometry_topic: "/odom"
     skip_frame: 2
@@ -53,8 +53,8 @@ lego_loam_mo:
     use_sim_time: true
     mapping:
 
-        distance_between_key_frame: 1.0
-        angle_between_key_frame: 1.0
+        distance_between_key_frame: 0.5
+        angle_between_key_frame: 0.5
 
         enable_loop_closure: true
 
@@ -65,3 +65,5 @@ lego_loam_mo:
         
         ground_voxel_size: 0.3
         ground_edge_threshold_num: 50
+
+        generate_testing_pg: true

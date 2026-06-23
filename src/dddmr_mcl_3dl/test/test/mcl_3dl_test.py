@@ -33,6 +33,13 @@ def generate_test_description():
     test_name+'.yaml'
   )
 
+  dddmr_pg_map_server = Node(
+    package="dddmr_pg_map_server",
+    executable="dddmr_pg_map_server_node",
+    output="screen",
+    parameters = [mcl_3dl_yaml]
+  )  
+
   mcl_3dl_feature_node = Node(
     package="lego_loam_bor",
     executable="mcl_feature",
@@ -77,6 +84,7 @@ def generate_test_description():
 
   return LaunchDescription([
       s2b,
+      dddmr_pg_map_server,
       mcl_3dl_feature_node,
       mcl_3dl_node,
       bag_player,

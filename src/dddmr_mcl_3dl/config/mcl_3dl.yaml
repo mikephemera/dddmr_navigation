@@ -9,7 +9,7 @@ map1:
 
 sub_maps:
   ros__parameters:
-    pg_map_server_name: "map1"
+    pg_map_server_name: "map1" #options from line#3
     sub_map_search_radius: 50.0
     sub_map_warmup_trigger_distance: 20.0
 

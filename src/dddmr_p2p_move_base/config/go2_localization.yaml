@@ -50,13 +50,21 @@ mcl_fa:
         nearest_feature_search_distance: 3.0
     mapping:
         to_map_optimization: false
-                
-sub_maps:
+
+dddmr_pg_map_server_manager:
+  ros__parameters:
+    maps: ["map1"]
+
+map1:
   ros__parameters:
     pose_graph_dir: "/root/dddmr_bags/gz_go2_demo_world"
+    complete_map_voxel_size: 0.4
+
+sub_maps:
+  ros__parameters:
+    pg_map_server_name: "map1" #options from line#56
     sub_map_search_radius: 50.0
     sub_map_warmup_trigger_distance: 20.0
-    complete_map_voxel_size: 0.4
 
 mcl_3dl:
   ros__parameters:

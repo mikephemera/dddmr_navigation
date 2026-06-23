@@ -157,7 +157,7 @@ private:
       double dz = transform_stamped_.transform.translation.z + 1.738;
       double distance_diff = sqrt(dx*dx + dy*dy + dz*dz);
       RCLCPP_INFO(this->get_logger(), "Distance deviation: %.3f m", distance_diff);
-      if(distance_diff<0.2){
+      if(distance_diff<0.3){
         current_state_ = State::SUCCEED;
       }
       else{

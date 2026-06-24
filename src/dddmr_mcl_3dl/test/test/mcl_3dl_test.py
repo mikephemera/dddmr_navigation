@@ -7,6 +7,8 @@ from launch import LaunchDescription
 from launch_ros.actions import Node, SetParameter
 from launch.actions import ExecuteProcess
 from launch.actions import TimerAction
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 
 import launch_testing
 import launch_testing.actions
@@ -17,6 +19,16 @@ import pytest
 
 @pytest.mark.launch_test
 def generate_test_description():
+
+  # Declare the launch argument for simulation time
+  use_sim_time_arg = DeclareLaunchArgument(
+      'use_sim_time',
+      default_value='true',
+      description='Use simulation (Gazebo) clock if true'
+  )
+  
+  # Reference the launch argument value
+  use_sim_time = LaunchConfiguration('use_sim_time')
 
   ### Change test name and TF only
   test_name = 'mcl_3dl'
@@ -37,21 +49,21 @@ def generate_test_description():
     package="dddmr_pg_map_server",
     executable="dddmr_pg_map_server_node",
     output="screen",
-    parameters = [mcl_3dl_yaml]
+    parameters = [mcl_3dl_yaml, {'use_sim_time': use_sim_time}]
   )  
 
   mcl_3dl_feature_node = Node(
     package="lego_loam_bor",
     executable="mcl_feature",
     output="screen",
-    parameters = [mcl_3dl_yaml]
+    parameters = [mcl_3dl_yaml, {'use_sim_time': use_sim_time}]
   )  
 
   mcl_3dl_node = Node(
     package="mcl_3dl",
     executable="mcl_3dl",
     output="screen",
-    parameters = [mcl_3dl_yaml]
+    parameters = [mcl_3dl_yaml, {'use_sim_time': use_sim_time}]
   )  
 
   #for test node
@@ -83,6 +95,7 @@ def generate_test_description():
   )  
 
   return LaunchDescription([
+      use_sim_time_arg,
       s2b,
       dddmr_pg_map_server,
       mcl_3dl_feature_node,

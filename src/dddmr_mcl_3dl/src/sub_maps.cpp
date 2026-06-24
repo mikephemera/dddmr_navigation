@@ -199,6 +199,7 @@ void SubMaps::warmUpThread(){
     ground_current_->clear();
     for(auto it=pointIdxRadiusSearch.begin(); it!=pointIdxRadiusSearch.end(); it++){
       *map_current_ += (*cornerCloudKeyFrames_[*it]);
+      //*map_current_ += (*surfCloudKeyFrames_[*it]);
       *ground_current_ += (*groundCloudKeyFrames_[*it]);
     }
 
@@ -246,6 +247,7 @@ void SubMaps::warmUpThread(){
     ground_warmup_->clear();
     for(auto it=pointIdxRadiusSearch.begin(); it!=pointIdxRadiusSearch.end(); it++){
       *map_warmup_ += (*cornerCloudKeyFrames_[*it]);
+      //*map_warmup_ += (*surfCloudKeyFrames_[*it]);
       *ground_warmup_ += (*groundCloudKeyFrames_[*it]);
     }
     kdtree_ground_warmup_.setInputCloud(ground_warmup_);

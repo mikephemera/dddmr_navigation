@@ -58,6 +58,9 @@
 #include <pcl/common/common.h>
 #include <pcl/search/kdtree.h>
 
+// omp voxel
+#include "dddmr_pcl/voxel_omp/voxel_grid_omp.h"
+
 // chrono_literals handles user-defined time durations (e.g. 500ms) 
 using namespace std::chrono_literals;
 
@@ -114,6 +117,9 @@ private:
   double sub_map_search_radius_;
   double sub_map_warmup_trigger_distance_;
   
+  pcl::VoxelGridOMP map_voxel_omp_;
+  pcl::VoxelGridOMP ground_voxel_omp_;
+
 public:
 
   SubMaps(std::string name);
@@ -146,6 +152,7 @@ public:
   pcl::KdTreeFLANN<mcl_3dl::pcl_t> kdtree_ground_warmup_;
   pcl::PointCloud<pcl::Normal> normals_ground_warmup_;
   
+  int knn_num_of_ground_normals_;
 };
 }  // namespace mcl_3dl
 

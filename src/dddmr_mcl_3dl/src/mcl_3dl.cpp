@@ -58,6 +58,8 @@ bool MCL3dlNode::configure(const std::shared_ptr<mcl_3dl::SubMaps>& sub_maps)
 {
   sub_maps_ = sub_maps;
   params_ = std::make_shared<Parameters>(this->get_node_logging_interface(), this->get_node_parameters_interface());
+  sub_maps_->knn_num_of_ground_normals_ = params_->knn_num_of_ground_normals_;
+  
   lidar_measurements_ = std::make_shared<LidarMeasurementModelLikelihood>();
   lidar_measurements_->loadConfig(this->get_node_logging_interface(), this->get_node_parameters_interface());
 

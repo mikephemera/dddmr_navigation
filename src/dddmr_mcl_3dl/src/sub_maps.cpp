@@ -31,8 +31,17 @@
 namespace mcl_3dl
 {
 SubMaps::SubMaps(std::string name) : Node(name), is_current_ready_(false), 
-  prepare_warm_up_(false), is_warm_up_ready_(false), is_initial_(false), key_poses_received_(false){
-  
+  prepare_warm_up_(false), is_warm_up_ready_(false), is_initial_(false), key_poses_received_(false),
+  knn_num_of_ground_normals_(20){
+
+  map_voxel_omp_.setNumberOfThreads(4);
+  map_voxel_omp_.setLeafSize (0.2, 0.2, 0.2);
+  map_voxel_omp_.setSaveLeafLayout(false);
+
+  ground_voxel_omp_.setNumberOfThreads(4);
+  ground_voxel_omp_.setLeafSize (0.2, 0.2, 0.2);
+  ground_voxel_omp_.setSaveLeafLayout(false);
+
   map_current_ = std::make_shared<pcl::PointCloud<pcl_t>>();
   ground_current_ = std::make_shared<pcl::PointCloud<pcl_t>>();
   map_warmup_ = std::make_shared<pcl::PointCloud<pcl_t>>();
@@ -203,6 +212,14 @@ void SubMaps::warmUpThread(){
       *ground_current_ += (*groundCloudKeyFrames_[*it]);
     }
 
+    map_voxel_omp_.setInputCloud(map_current_);
+    map_voxel_omp_.setFinalFilter(true);
+    map_voxel_omp_.filter(*map_current_);  
+
+    ground_voxel_omp_.setInputCloud(ground_current_);
+    ground_voxel_omp_.setFinalFilter(true);
+    ground_voxel_omp_.filter(*ground_current_);  
+
     kdtree_ground_current_.setInputCloud(ground_current_);
     kdtree_map_current_.setInputCloud(map_current_);   
     //@Normal estimation for ground
@@ -211,7 +228,7 @@ void SubMaps::warmUpThread(){
     tree->setInputCloud (ground_current_);
     n.setInputCloud (ground_current_);
     n.setSearchMethod (tree);
-    n.setKSearch (20);
+    n.setKSearch (knn_num_of_ground_normals_);
     n.compute (normals_ground_current_);
 
     sensor_msgs::msg::PointCloud2 map_pc;
@@ -250,6 +267,15 @@ void SubMaps::warmUpThread(){
       //*map_warmup_ += (*surfCloudKeyFrames_[*it]);
       *ground_warmup_ += (*groundCloudKeyFrames_[*it]);
     }
+
+    map_voxel_omp_.setInputCloud(map_warmup_);
+    map_voxel_omp_.setFinalFilter(true);
+    map_voxel_omp_.filter(*map_warmup_);  
+
+    ground_voxel_omp_.setInputCloud(ground_warmup_);
+    ground_voxel_omp_.setFinalFilter(true);
+    ground_voxel_omp_.filter(*ground_warmup_);  
+
     kdtree_ground_warmup_.setInputCloud(ground_warmup_);
     kdtree_map_warmup_.setInputCloud(map_warmup_);   
     //@Normal estimation for ground
@@ -258,7 +284,7 @@ void SubMaps::warmUpThread(){
     tree->setInputCloud (ground_warmup_);
     n.setInputCloud (ground_warmup_);
     n.setSearchMethod (tree);
-    n.setKSearch (20);
+    n.setKSearch (knn_num_of_ground_normals_);
     n.compute (normals_ground_warmup_);
     sensor_msgs::msg::PointCloud2 map_pc;
     pcl::toROSMsg(*map_warmup_, map_pc);

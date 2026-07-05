@@ -112,7 +112,7 @@ pcl::VoxelGridOMP::applyFilter(PointCloud &output)
         return;
     }
 
-    if (input_->points.size()<100)
+    if (input_->points.size()<1000)
     {
         output.width = input_->width;
         output.height = input_->height;

@@ -29,6 +29,7 @@ find_package(dddmr_sys_core REQUIRED)
 
 find_package(PCL 1.15 REQUIRED QUIET)
 find_package(OpenMP REQUIRED)
+find_package(dddmr_pcl REQUIRED)
 
 set(dependencies
   rclcpp
@@ -58,6 +59,7 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
   ${dddmr_sys_core_INCLUDE_DIRS}
   ${OpenMP_CXX_INCLUDE_DIRS}
+  ${dddmr_pcl_INCLUDE_DIRS}
 )
 
 # sub_maps
@@ -66,6 +68,7 @@ add_library(sub_maps SHARED
 )
 target_link_libraries(sub_maps
   ${PCL_LIBRARIES}
+  ${dddmr_pcl_LIBRARIES}
 )
 ament_target_dependencies(sub_maps
   ${dependencies}

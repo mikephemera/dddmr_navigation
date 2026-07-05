@@ -94,13 +94,14 @@ pcl::VoxelGridOMP::setNumberOfThreads (unsigned int nr_threads)
 #endif
     else
         threads_ = nr_threads;
-    printf("set number of threads: %d.\n", threads_);
+    //printf("set number of threads: %d.\n", threads_);
+    RCLCPP_INFO(rclcpp::get_logger("dddmr_pcl"), "set number of threads: %d.", threads_);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void
 pcl::VoxelGridOMP::applyFilter(PointCloud &output)
-{
+{   
     //    TicToc t_bbox;
     // Has the input dataset been set already?
     if (!input_)
@@ -118,7 +119,6 @@ pcl::VoxelGridOMP::applyFilter(PointCloud &output)
         output.points = input_->points;
         return;
     }
-
     // Copy the header (and thus the frame_id) + allocate enough space for points
     output.height       = 1;                    // downsampling breaks the organized structure
     output.is_dense     = true;                 // we filter out invalid points
@@ -132,7 +132,6 @@ pcl::VoxelGridOMP::applyFilter(PointCloud &output)
         getMinMax3DOMP(*input_, *indices_, min_p, max_p);
 //        printf("min max OMP cost: %fms\n", t_bbox.toc());
     }
-
     // Check that the leaf size is not too small, given the size of the data
     int64_t dx = static_cast<int64_t>((max_p[0] - min_p[0]) * inverse_leaf_size_[0])+1;
     int64_t dy = static_cast<int64_t>((max_p[1] - min_p[1]) * inverse_leaf_size_[1])+1;
@@ -166,7 +165,6 @@ pcl::VoxelGridOMP::applyFilter(PointCloud &output)
         centroid_size = boost::mpl::size<FieldList>::value; // dimension of all fields centroid
 //        printf("downsample_all_data_\n");
     }
-
     // ---[ RGB special case
     std::vector<pcl::PCLPointField> fields;
     int rgba_index = -1;
@@ -185,7 +183,6 @@ pcl::VoxelGridOMP::applyFilter(PointCloud &output)
     std::vector<std::shared_ptr<std::vector<int>>> index_all_threads(threads_);
     std::vector<std::shared_ptr<std::vector<double>>> weight_all_threads(threads_);
     std::vector<std::shared_ptr<std::vector<Eigen::VectorXf, Eigen::aligned_allocator<Eigen::VectorXf>>>> centroid_all_threads(threads_);
-
     // 安全修复：必须在进入 OMP 并行块之前完整初始化智能指针。
     // 如果在并行线程内部初始化这些 shared_ptr，极易引发堆内存竞态死锁或野指针崩溃。
     for (size_t i = 0; i < threads_; ++i) {
@@ -258,7 +255,6 @@ pcl::VoxelGridOMP::applyFilter(PointCloud &output)
             // First pass: go over all points and insert them into the index_vector vector
             // with calculated idx. Points with the same idx value will contribute to the
             // same point of resulting CloudPoint
-
 #pragma omp for schedule(dynamic,1024)
             for (size_t i = 0; i < indices_->size(); ++i) {
                 const int &point_id = indices_->at(i);
@@ -306,7 +302,6 @@ pcl::VoxelGridOMP::applyFilter(PointCloud &output)
         std::vector<std::pair<unsigned int, unsigned int> > first_and_last_indices_vector;
         // Worst case size
         first_and_last_indices_vector.reserve(index_vector.size());
-
         while (index < index_vector.size()) {
             unsigned int i = index + 1;
             while (i < index_vector.size() && index_vector[i].idx == index_vector[index].idx)
@@ -459,18 +454,29 @@ pcl::VoxelGridOMP::applyFilter(PointCloud &output)
             final_clouds[thread_id] = cloud;
         }
     }
+   
     size_t final_num = 0;
     for(auto& cloud: final_clouds){
-        final_num += cloud->size();
+        if((cloud == nullptr)){
+            RCLCPP_DEBUG(rclcpp::get_logger("dddmr_pcl"), "null ptr of a segment");
+        }
+        else{
+            final_num += cloud->size();
+        }
     }
     output.resize(final_num);
     char* dst= reinterpret_cast<char*>(&output[0]);
     size_t offset = 0;
     for(auto& cloud: final_clouds){
-        size_t copy_size = cloud->size()*sizeof(PointT);
-        char* src = reinterpret_cast<char*>(&((cloud->points)[0]));
-        std::memcpy(dst+offset, src, copy_size);
-        offset+=copy_size;
+        if((cloud == nullptr)){
+            RCLCPP_DEBUG(rclcpp::get_logger("dddmr_pcl"), "null ptr of a segment");
+        }
+        else{
+            size_t copy_size = cloud->size()*sizeof(PointT);
+            char* src = reinterpret_cast<char*>(&((cloud->points)[0]));
+            std::memcpy(dst+offset, src, copy_size);
+            offset+=copy_size;
+        }        
     }
 }
 

@@ -7,6 +7,7 @@
 #ifndef PCL_FILTERS_VOXEL_GRID_OMP_H
 #define PCL_FILTERS_VOXEL_GRID_OMP_H
 
+#include "rclcpp/rclcpp.hpp"
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
